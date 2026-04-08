@@ -742,7 +742,11 @@ class OpenTelemetryRequestMiddleware:
         status_code_holder: Dict[str, int] = {}
 
         async def _send_with_span_status(message: Mapping[str, Any]) -> None:
-            """Send ASGI message and update span status based on HTTP response code."""
+            """Send ASGI message and update span status based on HTTP response code.
+            
+            Args:
+                message: ASGI message containing HTTP response data
+            """
             if message.get("type") == "http.response.start":
                 status_code = int(message.get("status", 0) or 0)
                 status_code_holder["status"] = status_code
