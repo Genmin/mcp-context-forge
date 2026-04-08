@@ -743,7 +743,7 @@ class OpenTelemetryRequestMiddleware:
 
         async def _send_with_span_status(message: Mapping[str, Any]) -> None:
             """Send ASGI message and update span status based on HTTP response code.
-            
+
             Args:
                 message: ASGI message containing HTTP response data
             """
