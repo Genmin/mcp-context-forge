@@ -74,6 +74,14 @@ from mcpgateway.plugins.framework import ExternalPluginServer, MCPServerConfig
 from mcpgateway.plugins.framework.constants import GET_PLUGIN_CONFIG, GET_PLUGIN_CONFIGS, INVOKE_HOOK, MCP_SERVER_INSTRUCTIONS, MCP_SERVER_NAME
 from mcpgateway.plugins.framework.settings import get_transport_settings
 
+# Configure logging - respect LOG_LEVEL environment variable
+log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 logger = logging.getLogger(__name__)
 
 SERVER: ExternalPluginServer | None = None

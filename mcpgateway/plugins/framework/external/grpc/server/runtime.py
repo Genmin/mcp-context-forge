@@ -282,16 +282,18 @@ Examples:
         "--log-level",
         "-l",
         type=str,
-        default="INFO",
+        default=None,
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Logging level (default: INFO)",
+        help="Logging level (default: from LOG_LEVEL env var or INFO)",
     )
 
     args = parser.parse_args()
 
-    # Configure logging
+    # Configure logging - respect LOG_LEVEL environment variable, then CLI arg, then default to INFO
+    log_level_str = args.log_level or os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_str, logging.INFO)
     logging.basicConfig(
-        level=getattr(logging, args.log_level),
+        level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
