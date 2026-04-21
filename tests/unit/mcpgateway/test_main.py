@@ -4438,6 +4438,7 @@ def test_startup_warns_when_uaid_allowlist_empty():
         mock_settings.mcpgateway_a2a_enabled = True
         mock_settings.uaid_allowed_domains = []
         mock_settings.uaid_allow_all_domains = False
+        mock_settings.uaid_require_allowlist_on_startup = False
 
         # Import and trigger the validation logic
         from mcpgateway.main import validate_uaid_security_config
@@ -4490,6 +4491,7 @@ def test_startup_fails_when_uaid_require_allowlist_on_startup_set():
         mock_settings.mcpgateway_a2a_enabled = True
         mock_settings.uaid_allowed_domains = []
         mock_settings.uaid_allow_all_domains = False
+        mock_settings.uaid_require_allowlist_on_startup = True
 
         from mcpgateway.main import validate_uaid_security_config
 
@@ -4510,6 +4512,7 @@ def test_startup_succeeds_with_uaid_require_allowlist_false():
         mock_settings.mcpgateway_a2a_enabled = True
         mock_settings.uaid_allowed_domains = []
         mock_settings.uaid_allow_all_domains = False
+        mock_settings.uaid_require_allowlist_on_startup = False
 
         from mcpgateway.main import validate_uaid_security_config
 
