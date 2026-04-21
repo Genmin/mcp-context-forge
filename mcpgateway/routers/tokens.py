@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 # First-Party
+from mcpgateway.config import get_settings
 from mcpgateway.db import get_db
 from mcpgateway.middleware.rbac import get_current_user_with_permissions, require_permission
 from mcpgateway.schemas import TokenCreateRequest, TokenCreateResponse, TokenListResponse, TokenResponse, TokenRevokeRequest, TokenUpdateRequest, TokenUsageStatsResponse
@@ -202,10 +203,15 @@ async def create_token(
             access_token=raw_token,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.error(f"Token creation validation error: {e}")
+        settings = get_settings()
+        detail = str(e) if settings.debug else "Invalid request. Please check your input and try again."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     except IntegrityError as e:
         db.rollback()
         err_str = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
+        logger.error(f"Token creation integrity error: {err_str}")
+        settings = get_settings()
         # Match the specific name constraint: PostgreSQL reports the constraint name
         # (either the db.py name or the Alembic migration name); SQLite reports column paths.
         if (
@@ -214,11 +220,14 @@ async def create_token(
             or "uq_email_api_tokens_user_email_name" in err_str
             or ("email_api_tokens.user_email" in err_str and "email_api_tokens.name" in err_str)
         ):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A token with this name already exists for this user in the same team scope. Token names must be unique per user per team. Please choose a different name.",
+            detail = (
+                "A token with this name already exists. Please choose a different name."
+                if not settings.debug
+                else "A token with this name already exists for this user in the same team scope. Token names must be unique per user per team. Please choose a different name."
             )
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Token creation failed due to a conflict. Please try again.")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+        detail = "Request could not be completed. Please try again." if not settings.debug else "Token creation failed due to a conflict. Please try again."
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
 
 @router.get("", response_model=TokenListResponse)
@@ -435,7 +444,10 @@ async def update_token(
         db.close()
         return result
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.error(f"Token update validation error: {e}")
+        settings = get_settings()
+        detail = str(e) if settings.debug else "Invalid request. Please check your input and try again."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
 @router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -752,10 +764,15 @@ async def create_team_token(
             access_token=raw_token,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.error(f"Team token creation validation error: {e}")
+        settings = get_settings()
+        detail = str(e) if settings.debug else "Invalid request. Please check your input and try again."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     except IntegrityError as e:
         db.rollback()
         err_str = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
+        logger.error(f"Team token creation integrity error: {err_str}")
+        settings = get_settings()
         # Match the specific name constraint: PostgreSQL reports the constraint name
         # (either the db.py name or the Alembic migration name); SQLite reports column paths.
         if (
@@ -764,11 +781,14 @@ async def create_team_token(
             or "uq_email_api_tokens_user_email_name" in err_str
             or ("email_api_tokens.user_email" in err_str and "email_api_tokens.name" in err_str)
         ):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A token with this name already exists for this user in the same team scope. Token names must be unique per user per team. Please choose a different name.",
+            detail = (
+                "A token with this name already exists. Please choose a different name."
+                if not settings.debug
+                else "A token with this name already exists for this user in the same team scope. Token names must be unique per user per team. Please choose a different name."
             )
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Token creation failed due to a conflict. Please try again.")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+        detail = "Request could not be completed. Please try again." if not settings.debug else "Token creation failed due to a conflict. Please try again."
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
 
 @router.get("/teams/{team_id}", response_model=TokenListResponse)
@@ -850,4 +870,7 @@ async def list_team_tokens(
         db.close()
         return TokenListResponse(tokens=token_responses, total=total_count, limit=limit, offset=offset)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.error(f"List team tokens validation error: {e}")
+        settings = get_settings()
+        detail = str(e) if settings.debug else "Invalid request. Please check your input and try again."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
