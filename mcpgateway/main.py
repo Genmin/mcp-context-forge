@@ -37,7 +37,6 @@ import hmac
 import html
 import json
 import logging
-import os
 import re
 import signal
 import sys
@@ -2325,8 +2324,7 @@ def validate_uaid_security_config() -> None:
             logger.error(error_msg)
 
             # Check for strict mode (fail-fast on misconfiguration)
-            require_allowlist = os.getenv("UAID_REQUIRE_ALLOWLIST_ON_STARTUP", "false").lower() == "true"
-            if require_allowlist:
+            if settings.uaid_require_allowlist_on_startup:
                 raise RuntimeError(
                     f"{error_msg}\n\n"
                     "Gateway startup aborted due to UAID_REQUIRE_ALLOWLIST_ON_STARTUP=true. "
