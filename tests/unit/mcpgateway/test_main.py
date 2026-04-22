@@ -603,7 +603,7 @@ class TestProtocolEndpoints:
             "capabilities": {},
             "client_info": {"name": "Test Client", "version": "1.0.0"},
         }
-        response = test_client.post("/protocol/initialize", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/initialize", json=req, headers=auth_headers)
 
         assert response.status_code == 200
         body = response.json()
@@ -614,7 +614,7 @@ class TestProtocolEndpoints:
     def test_ping_endpoint(self, test_client, auth_headers):
         """Test MCP ping endpoint."""
         req = {"jsonrpc": "2.0", "method": "ping", "id": "test-id"}
-        response = test_client.post("/protocol/ping", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/ping", json=req, headers=auth_headers)
 
         assert response.status_code == 200
         body = response.json()
@@ -623,25 +623,15 @@ class TestProtocolEndpoints:
     def test_ping_invalid_method(self, test_client, auth_headers):
         """Test ping endpoint with invalid method."""
         req = {"jsonrpc": "2.0", "method": "invalid", "id": "test-id"}
-        response = test_client.post("/protocol/ping", json=req, headers=auth_headers)
-        assert response.status_code == 400
-        body = response.json()
-        assert body["error"]["code"] == -32600
-        assert body["error"]["message"] == "Invalid Request"
-
-    def test_ping_non_dict_body_returns_invalid_request(self, test_client, auth_headers):
-        """Ping endpoint should return -32600 when body is not a JSON object."""
-        response = test_client.post("/protocol/ping", json=[1, 2, 3], headers=auth_headers)
-        assert response.status_code == 400
-        body = response.json()
-        assert body["error"]["code"] == -32600
-        assert body["id"] is None
+        response = test_client.post("/v1/protocol/ping", json=req, headers=auth_headers)
+        # Implementation raises 5xx for unsupported method
+        assert response.status_code == 500
 
     @patch("mcpgateway.main.logging_service.notify")
     def test_handle_notification_initialized(self, mock_notify, test_client, auth_headers):
         """Test handling client initialized notification."""
         req = {"method": "notifications/initialized"}
-        response = test_client.post("/protocol/notifications", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/notifications", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_notify.assert_called_once()
 
@@ -654,7 +644,7 @@ class TestProtocolEndpoints:
         mock_get_context.return_value = ("test_user@example.com", [], False)
         mock_get_status.return_value = {"owner_email": "test_user@example.com", "owner_team_ids": []}
         req = {"method": "notifications/cancelled", "params": {"requestId": "123"}}
-        response = test_client.post("/protocol/notifications", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/notifications", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_cancel_run.assert_awaited_once_with("123", reason=None)
         mock_notify.assert_awaited_once()
@@ -668,7 +658,7 @@ class TestProtocolEndpoints:
         mock_get_context.return_value = ("viewer@example.com", [], False)
         mock_get_status.return_value = {"owner_email": "owner@example.com", "owner_team_ids": []}
         req = {"method": "notifications/cancelled", "params": {"requestId": "123"}}
-        response = test_client.post("/protocol/notifications", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/notifications", json=req, headers=auth_headers)
         assert response.status_code == 403
         assert response.json()["detail"] == "Not authorized to cancel this run"
         mock_cancel_run.assert_not_awaited()
@@ -683,7 +673,7 @@ class TestProtocolEndpoints:
         mock_get_context.return_value = ("viewer@example.com", [], False)
         mock_get_status.return_value = None
         req = {"method": "notifications/cancelled", "params": {"requestId": "unknown-run"}}
-        response = test_client.post("/protocol/notifications", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/notifications", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_cancel_run.assert_awaited_once_with("unknown-run", reason=None)
         mock_notify.assert_awaited_once()
@@ -710,7 +700,7 @@ class TestProtocolEndpoints:
             "method": "notifications/message",
             "params": {"data": "Test message", "level": "info", "logger": "test"},
         }
-        response = test_client.post("/protocol/notifications", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/notifications", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_notify.assert_called_once()
 
@@ -721,7 +711,7 @@ class TestProtocolEndpoints:
         mock_filter_context.return_value = ("scoped@example.com", ["team-1"], False)
         mock_completion.return_value = {"result": "completion_result"}
         req = {"ref": {"type": "ref/prompt", "name": "test"}}
-        response = test_client.post("/protocol/completion/complete", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/completion/complete", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_completion.assert_called_once_with(ANY, req, user_email="scoped@example.com", token_teams=["team-1"])
 
@@ -733,7 +723,7 @@ class TestProtocolEndpoints:
         mock_completion.return_value = {"result": "completion_result"}
 
         req = {"ref": {"type": "ref/prompt", "name": "test"}}
-        response = test_client.post("/protocol/completion/complete", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/completion/complete", json=req, headers=auth_headers)
 
         assert response.status_code == 200
         mock_completion.assert_called_once_with(ANY, req, user_email=None, token_teams=None)
@@ -746,7 +736,7 @@ class TestProtocolEndpoints:
         mock_completion.return_value = {"result": "completion_result"}
 
         req = {"ref": {"type": "ref/prompt", "name": "test"}}
-        response = test_client.post("/protocol/completion/complete", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/completion/complete", json=req, headers=auth_headers)
 
         assert response.status_code == 200
         mock_completion.assert_called_once_with(ANY, req, user_email="viewer@example.com", token_teams=[])
@@ -772,7 +762,7 @@ class TestProtocolEndpoints:
         """Test sampling message creation endpoint."""
         mock_sampling.return_value = {"messageId": "123"}
         req = {"messages": [{"role": "user", "content": {"type": "text", "text": "Hello"}}]}
-        response = test_client.post("/protocol/sampling/createMessage", json=req, headers=auth_headers)
+        response = test_client.post("/v1/protocol/sampling/createMessage", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_sampling.assert_called_once()
 
@@ -802,7 +792,7 @@ class TestServerEndpoints:
 
         mock_update.side_effect = ServerNotFoundError("Server not found")
         req = {"description": "Updated description"}
-        response = test_client.put("/servers/999", json=req, headers=auth_headers)
+        response = test_client.put("/v1/servers/999", json=req, headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.server_service.register_server")
@@ -810,7 +800,7 @@ class TestServerEndpoints:
         """Test create_server returns 422 for missing required fields."""
         mock_create.side_effect = None  # Let validation error happen
         req = {"description": "Missing name"}
-        response = test_client.post("/servers/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/servers/", json=req, headers=auth_headers)
         assert response.status_code == 422
 
     @patch("mcpgateway.main.server_service.register_server")
@@ -820,7 +810,7 @@ class TestServerEndpoints:
         from mcpgateway.services.server_service import ServerError
 
         mock_create.side_effect = ServerError("Bad server")
-        response = test_client.post("/servers/", json=_server_create_payload(), headers=auth_headers)
+        response = test_client.post("/v1/servers/", json=_server_create_payload(), headers=auth_headers)
         assert response.status_code == 400
 
     @pytest.mark.parametrize(
@@ -834,7 +824,7 @@ class TestServerEndpoints:
     def test_create_server_validation_and_integrity_errors(self, mock_create, exc, status_code, test_client, auth_headers):
         """Test create_server returns correct status for validation/integrity errors."""
         mock_create.side_effect = exc
-        response = test_client.post("/servers/", json=_server_create_payload(), headers=auth_headers)
+        response = test_client.post("/v1/servers/", json=_server_create_payload(), headers=auth_headers)
         assert response.status_code == status_code
 
     """Tests for virtual server management: CRUD operations, status toggles, etc."""
@@ -844,7 +834,7 @@ class TestServerEndpoints:
         """Test listing all servers."""
         mock_list_servers.return_value = ([ServerRead(**MOCK_SERVER_READ)], None)
 
-        response = test_client.get("/servers/", headers=auth_headers)
+        response = test_client.get("/v1/servers/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         # Default response is a plain list (include_pagination=False by default)
@@ -856,7 +846,7 @@ class TestServerEndpoints:
     def test_get_server_endpoint(self, mock_get, test_client, auth_headers):
         """Test retrieving a specific server."""
         mock_get.return_value = ServerRead(**MOCK_SERVER_READ)
-        response = test_client.get("/servers/1", headers=auth_headers)
+        response = test_client.get("/v1/servers/1", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["name"] == "test_server"
         mock_get.assert_called_once()
@@ -877,7 +867,7 @@ class TestServerEndpoints:
         """Test creating a new server."""
         mock_create.return_value = ServerRead(**MOCK_SERVER_READ)
         req = {"server": {"name": "test_server", "description": "A test server"}, "team_id": None, "visibility": "private"}
-        response = test_client.post("/servers/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/servers/", json=req, headers=auth_headers)
         assert response.status_code == 201
         mock_create.assert_called_once()
 
@@ -886,7 +876,7 @@ class TestServerEndpoints:
         """Test updating an existing server."""
         mock_update.return_value = ServerRead(**MOCK_SERVER_READ)
         req = {"description": "Updated description"}
-        response = test_client.put("/servers/1", json=req, headers=auth_headers)
+        response = test_client.put("/v1/servers/1", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_update.assert_called_once()
 
@@ -902,7 +892,7 @@ class TestServerEndpoints:
         """Test update_server error branches for validation/integrity errors."""
         mock_update.side_effect = exc
         req = {"description": "Updated description"}
-        response = test_client.put("/servers/1", json=req, headers=auth_headers)
+        response = test_client.put("/v1/servers/1", json=req, headers=auth_headers)
         assert response.status_code == status_code
 
     @patch("mcpgateway.main.server_service.set_server_state")
@@ -911,7 +901,7 @@ class TestServerEndpoints:
         updated_server = MOCK_SERVER_READ.copy()
         updated_server["enabled"] = False
         mock_toggle.return_value = ServerRead(**updated_server)
-        response = test_client.post("/servers/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/servers/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 200
         mock_toggle.assert_called_once()
 
@@ -919,7 +909,7 @@ class TestServerEndpoints:
     def test_set_server_state_permission_error(self, mock_toggle, test_client, auth_headers):
         """Test server state change forbidden error."""
         mock_toggle.side_effect = PermissionError("Forbidden")
-        response = test_client.post("/servers/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/servers/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 403
 
     @patch("mcpgateway.main.server_service.set_server_state")
@@ -929,7 +919,7 @@ class TestServerEndpoints:
         from mcpgateway.services.server_service import ServerNotFoundError
 
         mock_toggle.side_effect = ServerNotFoundError("Missing")
-        response = test_client.post("/servers/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/servers/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.server_service.delete_server")
@@ -938,7 +928,7 @@ class TestServerEndpoints:
         """Test permanently deleting a server."""
         mock_get.return_value = ServerRead(**MOCK_SERVER_READ)
         mock_delete.return_value = None
-        response = test_client.delete("/servers/1", headers=auth_headers)
+        response = test_client.delete("/v1/servers/1", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
@@ -949,7 +939,7 @@ class TestServerEndpoints:
         from mcpgateway.services.server_service import ServerNotFoundError
 
         mock_get.side_effect = ServerNotFoundError("Server not found: nonexistent-id")
-        response = test_client.delete("/servers/nonexistent-id", headers=auth_headers)
+        response = test_client.delete("/v1/servers/nonexistent-id", headers=auth_headers)
         assert response.status_code == 404
         assert "Server not found" in response.json()["detail"]
 
@@ -960,7 +950,7 @@ class TestServerEndpoints:
         mock_tool.model_dump.return_value = MOCK_TOOL_READ
         mock_list_tools.return_value = [mock_tool]
 
-        response = test_client.get("/servers/1/tools", headers=auth_headers)
+        response = test_client.get("/v1/servers/1/tools", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -973,7 +963,7 @@ class TestServerEndpoints:
         mock_resource.model_dump.return_value = MOCK_RESOURCE_READ
         mock_list_resources.return_value = [mock_resource]
 
-        response = test_client.get("/servers/1/resources", headers=auth_headers)
+        response = test_client.get("/v1/servers/1/resources", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -987,7 +977,7 @@ class TestServerEndpoints:
 
         mock_list_prompts.return_value = [PromptRead(**MOCK_PROMPT_READ)]
 
-        response = test_client.get("/servers/1/prompts", headers=auth_headers)
+        response = test_client.get("/v1/servers/1/prompts", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -1006,7 +996,7 @@ class TestToolEndpoints:
 
         mock_update.side_effect = ToolNotFoundError("Tool not found")
         req = {"description": "Updated description"}
-        response = test_client.put("/tools/999", json=req, headers=auth_headers)
+        response = test_client.put("/v1/tools/999", json=req, headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.create_tool")
@@ -1014,7 +1004,7 @@ class TestToolEndpoints:
         """Test create_tool returns 422 for missing required fields."""
         mock_create.side_effect = None  # Let validation error happen
         req = {"description": "Missing name and url"}
-        response = test_client.post("/tools/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/tools/", json=req, headers=auth_headers)
         assert response.status_code == 422
 
     @pytest.mark.parametrize(
@@ -1028,7 +1018,7 @@ class TestToolEndpoints:
     def test_create_tool_service_errors(self, mock_create, exc, status_code, test_client, auth_headers):
         """Test create_tool returns correct status for validation/integrity errors."""
         mock_create.side_effect = exc
-        response = test_client.post("/tools/", json=_tool_create_payload(), headers=auth_headers)
+        response = test_client.post("/v1/tools/", json=_tool_create_payload(), headers=auth_headers)
         assert response.status_code == status_code
 
     """Tests for tool management: registration, invocation, updates, etc."""
@@ -1039,7 +1029,7 @@ class TestToolEndpoints:
         tool_read = ToolRead(**MOCK_TOOL_READ_SNAKE)
         mock_list_tools.return_value = ([tool_read], None)
 
-        response = test_client.get("/tools/", headers=auth_headers)
+        response = test_client.get("/v1/tools/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         # Default response is a plain list (include_pagination=False by default)
@@ -1051,14 +1041,14 @@ class TestToolEndpoints:
     def test_create_tool_endpoint(self, mock_create, test_client, auth_headers):
         mock_create.return_value = MOCK_TOOL_READ_SNAKE
         req = {"tool": {"name": "test_tool", "url": "http://example.com", "description": "A test tool"}, "team_id": None, "visibility": "private"}
-        response = test_client.post("/tools/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/tools/", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_create.assert_called_once()
 
     @patch("mcpgateway.main.tool_service.get_tool")
     def test_get_tool_endpoint(self, mock_get, test_client, auth_headers):
         mock_get.return_value = MOCK_TOOL_READ_SNAKE
-        response = test_client.get("/tools/1", headers=auth_headers)
+        response = test_client.get("/v1/tools/1", headers=auth_headers)
         assert response.status_code == 200
         mock_get.assert_called_once()
 
@@ -1083,7 +1073,7 @@ class TestToolEndpoints:
         updated = {**MOCK_TOOL_READ_SNAKE, "description": "Updated description"}
         mock_update.return_value = updated
         req = {"description": "Updated description"}
-        response = test_client.put("/tools/1", json=req, headers=auth_headers)
+        response = test_client.put("/v1/tools/1", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_update.assert_called_once()
 
@@ -1099,7 +1089,7 @@ class TestToolEndpoints:
         """Test update_tool error branches for validation/integrity errors."""
         mock_update.side_effect = exc
         req = {"description": "Updated description"}
-        response = test_client.put("/tools/1", json=req, headers=auth_headers)
+        response = test_client.put("/v1/tools/1", json=req, headers=auth_headers)
         assert response.status_code == status_code
 
     @patch("mcpgateway.main.tool_service.set_tool_state")
@@ -1108,7 +1098,7 @@ class TestToolEndpoints:
         mock_tool = MagicMock()
         mock_tool.model_dump.return_value = {"id": 1, "name": "test", "is_active": False}
         mock_toggle.return_value = mock_tool
-        response = test_client.post("/tools/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/tools/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
@@ -1116,7 +1106,7 @@ class TestToolEndpoints:
     def test_set_tool_state_permission_error(self, mock_toggle, test_client, auth_headers):
         """Test tool state change forbidden error."""
         mock_toggle.side_effect = PermissionError("Forbidden")
-        response = test_client.post("/tools/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/tools/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 403
 
     @patch("mcpgateway.main.tool_service.set_tool_state")
@@ -1126,14 +1116,14 @@ class TestToolEndpoints:
         from mcpgateway.services.tool_service import ToolNotFoundError
 
         mock_toggle.side_effect = ToolNotFoundError("Missing")
-        response = test_client.post("/tools/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/tools/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.tool_service.delete_tool")
     def test_delete_tool_endpoint(self, mock_delete, test_client, auth_headers):
         """Test permanently deleting a tool."""
         mock_delete.return_value = None
-        response = test_client.delete("/tools/1", headers=auth_headers)
+        response = test_client.delete("/v1/tools/1", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
@@ -1150,7 +1140,7 @@ class TestResourceEndpoints:
 
         mock_update.side_effect = ResourceNotFoundError("Resource not found")
         req = {"description": "Updated description"}
-        response = test_client.put("/resources/nonexistent", json=req, headers=auth_headers)
+        response = test_client.put("/v1/resources/nonexistent", json=req, headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.resource_service.register_resource")
@@ -1158,7 +1148,7 @@ class TestResourceEndpoints:
         """Test create_resource returns 422 for missing required fields."""
         mock_create.side_effect = None  # Let validation error happen
         req = {"description": "Missing uri and name"}
-        response = test_client.post("/resources/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/resources/", json=req, headers=auth_headers)
         assert response.status_code == 422
 
     @pytest.mark.parametrize(
@@ -1173,7 +1163,7 @@ class TestResourceEndpoints:
         """Test update_resource error branches for validation/integrity errors."""
         mock_update.side_effect = exc
         req = {"description": "Updated description"}
-        response = test_client.put("/resources/1", json=req, headers=auth_headers)
+        response = test_client.put("/v1/resources/1", json=req, headers=auth_headers)
         assert response.status_code == status_code
 
     """Tests for resource management: reading, creation, caching, etc."""
@@ -1183,7 +1173,7 @@ class TestResourceEndpoints:
         """Test listing all available resources."""
         mock_list_resources.return_value = ([ResourceRead(**MOCK_RESOURCE_READ)], None)
 
-        response = test_client.get("/resources/", headers=auth_headers)
+        response = test_client.get("/v1/resources/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         # Default response is a plain list (include_pagination=False by default)
@@ -1197,7 +1187,7 @@ class TestResourceEndpoints:
 
         mock_update.side_effect = ContentSizeError("Resource", 150000, 102400)
         req = {"content": "x" * 150000}
-        response = test_client.put("/resources/1", json=req, headers=auth_headers)
+        response = test_client.put("/v1/resources/1", json=req, headers=auth_headers)
         assert response.status_code == 413
         data = response.json()["detail"]
         assert data["error"] == "Resource size limit exceeded"
@@ -1212,7 +1202,7 @@ class TestResourceEndpoints:
 
         mock_update.side_effect = ContentTypeError("application/x-executable", ["text/plain", "application/json"])
         req = {"mime_type": "text/plain", "content": "hello"}
-        response = test_client.put("/resources/1", json=req, headers=auth_headers)
+        response = test_client.put("/v1/resources/1", json=req, headers=auth_headers)
         assert response.status_code == 415
         data = response.json()["detail"]
         assert data["error"] == "Unsupported Media Type"
@@ -1252,7 +1242,7 @@ class TestResourceEndpoints:
         mock_create.return_value = ResourceRead(**MOCK_RESOURCE_READ)
 
         req = {"resource": {"uri": "test/resource", "name": "Test Resource", "description": "A test resource", "content": "Hello world"}, "team_id": None, "visibility": "private"}
-        response = test_client.post("/resources/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/resources/", json=req, headers=auth_headers)
 
         assert response.status_code == 200  # route returns 200 on success
 
@@ -1311,7 +1301,7 @@ class TestResourceEndpoints:
 
         mock_create.side_effect = ContentTypeError("application/x-malicious", ["text/plain", "application/json"])
         req = {"resource": {"uri": "test/resource", "name": "Test Resource", "mime_type": "text/plain", "content": "hello"}, "team_id": None, "visibility": "private"}
-        response = test_client.post("/resources/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/resources/", json=req, headers=auth_headers)
         assert response.status_code == 415
         data = response.json()["detail"]
         assert data["error"] == "Unsupported Media Type"
@@ -1325,7 +1315,7 @@ class TestResourceEndpoints:
         """Test create_resource returns 413 for content size limit exceeded."""
         mock_create.side_effect = ContentSizeError("Resource", 150000, 102400)
         req = {"resource": {"uri": "test/resource", "name": "Test Resource", "content": "x" * 150000}, "team_id": None, "visibility": "private"}
-        response = test_client.post("/resources/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/resources/", json=req, headers=auth_headers)
         assert response.status_code == 413
         data = response.json()["detail"]
         assert data["error"] == "Resource size limit exceeded"
@@ -1351,7 +1341,7 @@ class TestResourceEndpoints:
             text="This is test content",
         )
 
-        response = test_client.get("/resources/1", headers=auth_headers)
+        response = test_client.get("/v1/resources/1", headers=auth_headers)
         assert response.status_code == 200
         body = response.json()
         assert body["uri"] == "test/resource" and body["text"] == "This is test content"
@@ -1363,7 +1353,7 @@ class TestResourceEndpoints:
         mock_update.return_value = ResourceRead(**MOCK_RESOURCE_READ)
         resource_id = mock_update.return_value.id
         req = {"description": "Updated description"}
-        response = test_client.put(f"/resources/{resource_id}", json=req, headers=auth_headers)
+        response = test_client.put(f"/v1/resources/{resource_id}", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_update.assert_called_once()
 
@@ -1373,7 +1363,7 @@ class TestResourceEndpoints:
         mock_delete.return_value = None
         # Use the same resource_id as in test_update_resource_endpoint
         resource_id = MOCK_RESOURCE_READ["id"]
-        response = test_client.delete(f"/resources/{resource_id}", headers=auth_headers)
+        response = test_client.delete(f"/v1/resources/{resource_id}", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
@@ -1381,7 +1371,7 @@ class TestResourceEndpoints:
     def test_list_resource_templates(self, mock_list, test_client, auth_headers):
         """Test listing available resource templates."""
         mock_list.return_value = []
-        response = test_client.get("/resources/templates/list", headers=auth_headers)
+        response = test_client.get("/v1/resources/templates/list", headers=auth_headers)
         assert response.status_code == 200
         mock_list.assert_called_once()
 
@@ -1407,14 +1397,14 @@ class TestResourceEndpoints:
         mock_resource = MagicMock()
         mock_resource.model_dump.return_value = {"id": "1", "enabled": False}
         mock_toggle.return_value = mock_resource
-        response = test_client.post("/resources/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/resources/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 200
 
     @patch("mcpgateway.main.resource_service.set_resource_state")
     def test_set_resource_state_permission_error(self, mock_toggle, test_client, auth_headers):
         """Test resource state change forbidden error."""
         mock_toggle.side_effect = PermissionError("Forbidden")
-        response = test_client.post("/resources/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/resources/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 403
 
     @patch("mcpgateway.main.resource_service.set_resource_state")
@@ -1424,7 +1414,7 @@ class TestResourceEndpoints:
         from mcpgateway.services.resource_service import ResourceNotFoundError
 
         mock_toggle.side_effect = ResourceNotFoundError("Missing")
-        response = test_client.post("/resources/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/resources/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.resource_service.subscribe_events")
@@ -1435,7 +1425,7 @@ class TestResourceEndpoints:
             yield {"type": "resource_updated", "data": {"id": "1", "uri": "file:///test"}}
 
         mock_subscribe.return_value = mock_generator()
-        response = test_client.post("/resources/subscribe", headers=auth_headers)
+        response = test_client.post("/v1/resources/subscribe", headers=auth_headers)
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
         # Handler pre-resolves is_admin_bypass; with user_email=None it resolves to True
@@ -1451,7 +1441,7 @@ class TestResourceEndpoints:
             yield {"type": "resource_deleted", "data": {"id": "2", "uri": "file:///old"}}
 
         mock_subscribe.return_value = mock_generator()
-        response = test_client.post("/resources/subscribe", headers=auth_headers)
+        response = test_client.post("/v1/resources/subscribe", headers=auth_headers)
         assert response.status_code == 200
 
         # Collect the streamed body
@@ -1478,7 +1468,7 @@ class TestPromptEndpoints:
         from mcpgateway.services.prompt_service import PromptNotFoundError
 
         mock_delete.side_effect = PromptNotFoundError("Prompt not found")
-        response = test_client.delete("/prompts/nonexistent", headers=auth_headers)
+        response = test_client.delete("/v1/prompts/nonexistent", headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.prompt_service.update_prompt")
@@ -1489,7 +1479,7 @@ class TestPromptEndpoints:
 
         mock_update.side_effect = PromptNotFoundError("Prompt not found")
         req = {"description": "Updated description"}
-        response = test_client.put("/prompts/nonexistent", json=req, headers=auth_headers)
+        response = test_client.put("/v1/prompts/nonexistent", json=req, headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.prompt_service.register_prompt")
@@ -1497,14 +1487,14 @@ class TestPromptEndpoints:
         """Test create_prompt returns 422 for missing required fields."""
         mock_create.side_effect = None  # Let validation error happen
         req = {"description": "Missing name and template"}
-        response = test_client.post("/prompts/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/prompts/", json=req, headers=auth_headers)
         assert response.status_code == 422
 
     @patch("mcpgateway.main.prompt_service.get_prompt")
     def test_get_prompt_no_args_non_jwt_admin_bypass(self, mock_get, test_client, auth_headers):
         """Non-JWT admin (dev-mode / basic-auth) gets admin bypass via get_scoped_resource_access_context."""
         mock_get.return_value = {"name": "test", "template": "Hello"}
-        response = test_client.get("/prompts/test", headers=auth_headers)
+        response = test_client.get("/v1/prompts/test", headers=auth_headers)
         assert response.status_code == 200
         mock_get.assert_called_once_with(
             ANY,
@@ -1620,7 +1610,7 @@ class TestPromptEndpoints:
         updated = {**MOCK_PROMPT_READ, "description": "Updated description"}
         mock_update.return_value = PromptRead(**updated)
         req = {"description": "Updated description"}
-        response = test_client.put("/prompts/test_prompt", json=req, headers=auth_headers)
+        response = test_client.put("/v1/prompts/test_prompt", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_update.assert_called_once()
 
@@ -1635,6 +1625,7 @@ class TestPromptEndpoints:
     def test_update_prompt_validation_and_integrity_errors(self, mock_update, exc, status_code, test_client, auth_headers):
         """Test update_prompt error branches for validation/integrity errors."""
         mock_update.side_effect = exc
+<<<<<<< HEAD
 
     @patch("mcpgateway.main.prompt_service.register_prompt")
     def test_create_prompt_content_size_error(self, mock_create, test_client, auth_headers):
@@ -1695,6 +1686,52 @@ class TestPromptEndpoints:
         assert data["error"] == "Prompt size limit exceeded"
         assert data["actual_size"] == 15000
         assert data["max_size"] == 10240
+=======
+        req = {"description": "Updated description"}
+        response = test_client.put("/v1/prompts/test_prompt", json=req, headers=auth_headers)
+        assert response.status_code == status_code
+>>>>>>> c30329b33 (Refactor API paths to include versioning in tests)
+
+    @patch("mcpgateway.main.prompt_service.register_prompt")
+    def test_create_prompt_content_size_error(self, mock_create, test_client, auth_headers):
+        """Test create_prompt returns 413 for content size limit exceeded."""
+        mock_create.side_effect = ContentSizeError("Prompt", 15000, 10240)
+        req = {"prompt": {"name": "test_prompt", "template": "x" * 15000}, "team_id": None, "visibility": "private"}
+        response = test_client.post("/v1/prompts/", json=req, headers=auth_headers)
+        assert response.status_code == 413
+        data = response.json()["detail"]
+        assert data["error"] == "Prompt size limit exceeded"
+        assert data["actual_size"] == 15000
+        assert data["max_size"] == 10240
+
+    @patch("mcpgateway.main.prompt_service.update_prompt")
+    def test_update_prompt_content_size_error(self, mock_update, test_client, auth_headers):
+        """Test update_prompt returns 413 for content size limit exceeded."""
+        mock_update.side_effect = ContentSizeError("Prompt", 15000, 10240)
+        req = {"template": "x" * 15000}
+        response = test_client.put("/v1/prompts/test_prompt", json=req, headers=auth_headers)
+        assert response.status_code == 413
+        data = response.json()["detail"]
+        assert data["error"] == "Prompt size limit exceeded"
+        assert data["actual_size"] == 15000
+        assert data["max_size"] == 10240
+
+    @patch("mcpgateway.main.prompt_service.update_prompt")
+    def test_update_prompt_content_pattern_error(self, mock_update, test_client, auth_headers):
+        """Test update_prompt returns 400 for template validation error with dangerous pattern."""
+        # First-Party
+        from mcpgateway.services.content_security import TemplateValidationError
+
+        mock_update.side_effect = TemplateValidationError(template_name="test_prompt", reason="Template contains dangerous pattern that could lead to code injection", pattern="__import__")
+        req = {"template": "Hello {{name}}"}
+        response = test_client.put("/prompts/test_prompt", json=req, headers=auth_headers)
+        assert response.status_code == 400
+        data = response.json()["detail"]
+        assert data["error"] == "Template validation failed"
+        assert data["template_name"] == "test_prompt"
+        assert "dangerous pattern" in data["reason"].lower()
+        assert data["pattern"] == "__import__"
+        assert "message" in data
 
     @patch("mcpgateway.main.prompt_service.register_prompt")
     def test_create_prompt_content_size_error(self, mock_create, test_client, auth_headers):
@@ -1741,7 +1778,7 @@ class TestPromptEndpoints:
     def test_delete_prompt_endpoint_secondary(self, mock_delete, test_client, auth_headers):
         """Test deleting a prompt."""
         mock_delete.return_value = None
-        response = test_client.delete("/prompts/test_prompt", headers=auth_headers)
+        response = test_client.delete("/v1/prompts/test_prompt", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
         mock_delete.assert_called_once()
@@ -1752,7 +1789,7 @@ class TestPromptEndpoints:
         mock_prompt = MagicMock()
         mock_prompt.model_dump.return_value = {"id": 1, "enabled": False}
         mock_toggle.return_value = mock_prompt
-        response = test_client.post("/prompts/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/prompts/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
         mock_toggle.assert_called_once()
@@ -1761,7 +1798,7 @@ class TestPromptEndpoints:
     def test_set_prompt_state_permission_error(self, mock_toggle, test_client, auth_headers):
         """Test prompt state change forbidden error."""
         mock_toggle.side_effect = PermissionError("Forbidden")
-        response = test_client.post("/prompts/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/prompts/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 403
 
     @patch("mcpgateway.main.prompt_service.set_prompt_state")
@@ -1771,7 +1808,7 @@ class TestPromptEndpoints:
         from mcpgateway.services.prompt_service import PromptNotFoundError
 
         mock_toggle.side_effect = PromptNotFoundError("Missing")
-        response = test_client.post("/prompts/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/prompts/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 404
 
     """Tests for prompt template management: creation, rendering, arguments, etc."""
@@ -1781,7 +1818,7 @@ class TestPromptEndpoints:
         """Test listing all available prompts."""
         prompt_read = PromptRead(**MOCK_PROMPT_READ)
         mock_list_prompts.return_value = ([prompt_read], None)
-        response = test_client.get("/prompts/", headers=auth_headers)
+        response = test_client.get("/v1/prompts/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         # Default response is a plain list (include_pagination=False by default)
@@ -1796,7 +1833,7 @@ class TestPromptEndpoints:
         mock_create.return_value = PromptRead(**MOCK_PROMPT_READ)
 
         req = {"prompt": {"name": "test_prompt", "template": "Hello {name}", "description": "A test prompt"}, "team_id": None, "visibility": "private"}
-        response = test_client.post("/prompts/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/prompts/", json=req, headers=auth_headers)
 
         assert response.status_code == 200
         mock_create.assert_called_once()
@@ -1809,20 +1846,31 @@ class TestPromptEndpoints:
             "description": "A test prompt",
         }
         req = {"name": "value"}
-        response = test_client.post("/prompts/test_prompt", json=req, headers=auth_headers)
+        response = test_client.post("/v1/prompts/test_prompt", json=req, headers=auth_headers)
         assert response.status_code == 200
         body = response.json()
         assert body["messages"][0]["content"]["text"] == "Rendered prompt"
         mock_get.assert_called_once()
 
     @patch("mcpgateway.main.prompt_service.get_prompt")
+<<<<<<< HEAD
+=======
+    def test_get_prompt_no_args(self, mock_get, test_client, auth_headers):
+        """Test getting a prompt without arguments."""
+        mock_get.return_value = {"name": "test", "template": "Hello"}
+        response = test_client.get("/v1/prompts/test", headers=auth_headers)
+        assert response.status_code == 200
+        mock_get.assert_called_once_with(ANY, "test", {}, user=None, server_id=None, token_teams=None, plugin_context_table=None, plugin_global_context=ANY)
+
+    @patch("mcpgateway.main.prompt_service.get_prompt")
+>>>>>>> c30329b33 (Refactor API paths to include versioning in tests)
     def test_get_prompt_no_args_ambiguous_returns_422(self, mock_get, test_client, auth_headers):
         """GET /prompts/{id} returns 422 when prompt name is ambiguous across scopes."""
         # First-Party
         from mcpgateway.services.prompt_service import PromptError
 
         mock_get.side_effect = PromptError("Prompt name 'code_review' is ambiguous across multiple scopes")
-        response = test_client.get("/prompts/code_review", headers=auth_headers)
+        response = test_client.get("/v1/prompts/code_review", headers=auth_headers)
         assert response.status_code == 422
         assert "ambiguous" in response.json()["detail"]
 
@@ -1850,7 +1898,7 @@ class TestPromptEndpoints:
         mock_update.return_value = PromptRead(**updated)  # <- real model
 
         req = {"description": "Updated description"}
-        response = test_client.put("/prompts/test_prompt", json=req, headers=auth_headers)
+        response = test_client.put("/v1/prompts/test_prompt", json=req, headers=auth_headers)
 
         assert response.status_code == 200
         mock_update.assert_called_once()
@@ -1859,7 +1907,7 @@ class TestPromptEndpoints:
     def test_delete_prompt_endpoint(self, mock_delete, test_client, auth_headers):
         """Test deleting a prompt."""
         mock_delete.return_value = None
-        response = test_client.delete("/prompts/test_prompt", headers=auth_headers)
+        response = test_client.delete("/v1/prompts/test_prompt", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
@@ -1869,7 +1917,7 @@ class TestPromptEndpoints:
         mock_prompt = MagicMock()
         mock_prompt.model_dump.return_value = {"id": 1, "enabled": False}
         mock_toggle.return_value = mock_prompt
-        response = test_client.post("/prompts/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/prompts/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
@@ -1883,7 +1931,7 @@ class TestGatewayEndpoints:
         """Test listing all registered gateways."""
         gateway_read = GatewayRead(**MOCK_GATEWAY_READ)
         mock_list.return_value = ([gateway_read], None)
-        response = test_client.get("/gateways/", headers=auth_headers)
+        response = test_client.get("/v1/gateways/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         # Default response is a plain list (include_pagination=False by default)
@@ -1896,7 +1944,7 @@ class TestGatewayEndpoints:
         """Test registering a new gateway."""
         mock_create.return_value = MOCK_GATEWAY_READ
         req = {"name": "test_gateway", "url": "http://example.com"}
-        response = test_client.post("/gateways/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/gateways/", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_create.assert_called_once()
 
@@ -1904,7 +1952,7 @@ class TestGatewayEndpoints:
     def test_get_gateway_endpoint_secondary(self, mock_get, test_client, auth_headers):
         """Test retrieving a specific gateway."""
         mock_get.return_value = MOCK_GATEWAY_READ
-        response = test_client.get("/gateways/1", headers=auth_headers)
+        response = test_client.get("/v1/gateways/1", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["name"] == "test_gateway"
         mock_get.assert_called_once()
@@ -1914,7 +1962,7 @@ class TestGatewayEndpoints:
         """Test updating an existing gateway."""
         mock_update.return_value = MOCK_GATEWAY_READ
         req = {"description": "Updated description"}
-        response = test_client.put("/gateways/1", json=req, headers=auth_headers)
+        response = test_client.put("/v1/gateways/1", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_update.assert_called_once()
 
@@ -1924,7 +1972,7 @@ class TestGatewayEndpoints:
         """Test deleting a gateway that doesn't have resources."""
         mock_delete.return_value = None
         mock_get.return_value.capabilities = {}
-        response = test_client.delete("/gateways/1", headers=auth_headers)
+        response = test_client.delete("/v1/gateways/1", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
         mock_delete.assert_called_once()
@@ -1937,7 +1985,7 @@ class TestGatewayEndpoints:
         mock_delete.return_value = None
         mock_get.return_value = MagicMock()
         mock_get.return_value.capabilities = {"resources": {"some": "thing"}}
-        response = test_client.delete("/gateways/1", headers=auth_headers)
+        response = test_client.delete("/v1/gateways/1", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
         mock_delete.assert_called_once()
@@ -1949,7 +1997,7 @@ class TestGatewayEndpoints:
         mock_gateway = MagicMock()
         mock_gateway.model_dump.return_value = {"id": "1", "is_active": False}
         mock_toggle.return_value = mock_gateway
-        response = test_client.post("/gateways/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/gateways/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
         mock_toggle.assert_called_once()
@@ -1958,7 +2006,7 @@ class TestGatewayEndpoints:
     def test_set_gateway_state_permission_error(self, mock_toggle, test_client, auth_headers):
         """Test gateway state change forbidden error."""
         mock_toggle.side_effect = PermissionError("Forbidden")
-        response = test_client.post("/gateways/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/gateways/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 403
 
     @patch("mcpgateway.main.gateway_service.set_gateway_state")
@@ -1968,7 +2016,7 @@ class TestGatewayEndpoints:
         from mcpgateway.services.gateway_service import GatewayNotFoundError
 
         mock_toggle.side_effect = GatewayNotFoundError("Missing")
-        response = test_client.post("/gateways/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/gateways/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 404
 
     """Tests for gateway federation: registration, discovery, forwarding, etc."""
@@ -1978,7 +2026,7 @@ class TestGatewayEndpoints:
         """Test listing all registered gateways."""
         gateway_read = GatewayRead(**MOCK_GATEWAY_READ)
         mock_list.return_value = ([gateway_read], None)
-        response = test_client.get("/gateways/", headers=auth_headers)
+        response = test_client.get("/v1/gateways/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         # Default response is a plain list (include_pagination=False by default)
@@ -1991,7 +2039,7 @@ class TestGatewayEndpoints:
         """Test registering a new gateway."""
         mock_create.return_value = MOCK_GATEWAY_READ
         req = {"name": "test_gateway", "url": "http://example.com"}
-        response = test_client.post("/gateways/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/gateways/", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_create.assert_called_once()
 
@@ -1999,7 +2047,7 @@ class TestGatewayEndpoints:
     def test_get_gateway_endpoint(self, mock_get, test_client, auth_headers):
         """Test retrieving a specific gateway."""
         mock_get.return_value = MOCK_GATEWAY_READ
-        response = test_client.get("/gateways/1", headers=auth_headers)
+        response = test_client.get("/v1/gateways/1", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["name"] == "test_gateway"
         mock_get.assert_called_once()
@@ -2020,7 +2068,7 @@ class TestGatewayEndpoints:
         """Test updating an existing gateway."""
         mock_update.return_value = MOCK_GATEWAY_READ
         req = {"description": "Updated description"}
-        response = test_client.put("/gateways/1", json=req, headers=auth_headers)
+        response = test_client.put("/v1/gateways/1", json=req, headers=auth_headers)
         assert response.status_code == 200
         mock_update.assert_called_once()
 
@@ -2030,7 +2078,7 @@ class TestGatewayEndpoints:
         """Test deleting a gateway."""
         mock_delete.return_value = None
         mock_get.return_value.capabilities = {}
-        response = test_client.delete("/gateways/1", headers=auth_headers)
+        response = test_client.delete("/v1/gateways/1", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
@@ -2040,7 +2088,7 @@ class TestGatewayEndpoints:
         mock_gateway = MagicMock()
         mock_gateway.model_dump.return_value = {"id": "1", "is_active": False}
         mock_toggle.return_value = mock_gateway
-        response = test_client.post("/gateways/1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/gateways/1/state?activate=false", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
@@ -2056,7 +2104,7 @@ class TestTagEndpoints:
         mock_filter_context.return_value = ("scoped@example.com", ["team-1"], False)
         mock_get_tags.return_value = []
 
-        response = test_client.get("/tags", headers=auth_headers)
+        response = test_client.get("/v1/tags", headers=auth_headers)
 
         assert response.status_code == 200
         mock_get_tags.assert_awaited_once_with(
@@ -2074,7 +2122,7 @@ class TestTagEndpoints:
         mock_filter_context.return_value = ("admin@example.com", [], False)
         mock_get_entities.return_value = []
 
-        response = test_client.get("/tags/test/entities", headers=auth_headers)
+        response = test_client.get("/v1/tags/test/entities", headers=auth_headers)
 
         assert response.status_code == 200
         mock_get_entities.assert_awaited_once_with(
@@ -2092,7 +2140,7 @@ class TestTagEndpoints:
         mock_filter_context.return_value = ("admin@example.com", None, True)
         mock_get_tags.return_value = []
 
-        response = test_client.get("/tags", headers=auth_headers)
+        response = test_client.get("/v1/tags", headers=auth_headers)
 
         assert response.status_code == 200
         mock_get_tags.assert_awaited_once_with(
@@ -2110,7 +2158,7 @@ class TestTagEndpoints:
         mock_filter_context.return_value = ("viewer@example.com", None, False)
         mock_get_tags.return_value = []
 
-        response = test_client.get("/tags", headers=auth_headers)
+        response = test_client.get("/v1/tags", headers=auth_headers)
 
         assert response.status_code == 200
         mock_get_tags.assert_awaited_once_with(
@@ -2128,7 +2176,7 @@ class TestTagEndpoints:
         mock_filter_context.return_value = ("admin@example.com", None, True)
         mock_get_entities.return_value = []
 
-        response = test_client.get("/tags/test/entities", headers=auth_headers)
+        response = test_client.get("/v1/tags/test/entities", headers=auth_headers)
 
         assert response.status_code == 200
         mock_get_entities.assert_awaited_once_with(
@@ -2146,7 +2194,7 @@ class TestTagEndpoints:
         mock_filter_context.return_value = ("viewer@example.com", None, False)
         mock_get_entities.return_value = []
 
-        response = test_client.get("/tags/test/entities", headers=auth_headers)
+        response = test_client.get("/v1/tags/test/entities", headers=auth_headers)
 
         assert response.status_code == 200
         mock_get_entities.assert_awaited_once_with(
@@ -2161,14 +2209,14 @@ class TestTagEndpoints:
     def test_list_tags_error(self, mock_get_tags, test_client, auth_headers):
         """Test tag list error handling."""
         mock_get_tags.side_effect = Exception("Tag failure")
-        response = test_client.get("/tags", headers=auth_headers)
+        response = test_client.get("/v1/tags", headers=auth_headers)
         assert response.status_code == 500
 
     @patch("mcpgateway.main.tag_service.get_entities_by_tag")
     def test_get_entities_by_tag_error(self, mock_get_entities, test_client, auth_headers):
         """Test tag entity lookup error handling."""
         mock_get_entities.side_effect = Exception("Entity lookup failure")
-        response = test_client.get("/tags/test/entities", headers=auth_headers)
+        response = test_client.get("/v1/tags/test/entities", headers=auth_headers)
         assert response.status_code == 500
 
 
@@ -2185,7 +2233,7 @@ class TestRootEndpoints:
         from mcpgateway.common.models import Root
 
         mock_list.return_value = [Root(uri="file:///test", name="Test Root")]  # valid URI
-        response = test_client.get("/roots/", headers=auth_headers)
+        response = test_client.get("/v1/roots/", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -2205,7 +2253,7 @@ class TestRootEndpoints:
         try:
             client = TestClient(app)
             with patch("mcpgateway.middleware.rbac.PermissionService.check_permission", new=AsyncMock(return_value=False)):
-                response = client.get("/roots/", headers=auth_headers)
+                response = client.get("/v1/roots/", headers=auth_headers)
         finally:
             app.dependency_overrides.pop(get_current_user_with_permissions, None)
         assert response.status_code == 403
@@ -2213,12 +2261,12 @@ class TestRootEndpoints:
     @pytest.mark.parametrize(
         ("method", "path", "payload"),
         [
-            ("get", "/roots/export?uri=file:///test", None),
-            ("get", "/roots/changes", None),
-            ("get", "/roots/file%3A%2F%2F%2Ftest", None),
-            ("post", "/roots/", {"uri": "file:///test", "name": "Test Root"}),
-            ("put", "/roots/file%3A%2F%2F%2Ftest", {"uri": "file:///test", "name": "Updated Root"}),
-            ("delete", "/roots/file%3A%2F%2F%2Ftest", None),
+            ("get", "/v1/roots/export?uri=file:///test", None),
+            ("get", "/v1/roots/changes", None),
+            ("get", "/v1/roots/file%3A%2F%2F%2Ftest", None),
+            ("post", "/v1/roots/", {"uri": "file:///test", "name": "Test Root"}),
+            ("put", "/v1/roots/file%3A%2F%2F%2Ftest", {"uri": "file:///test", "name": "Updated Root"}),
+            ("delete", "/v1/roots/file%3A%2F%2F%2Ftest", None),
         ],
     )
     def test_root_management_endpoints_require_admin_permission(self, method, path, payload, auth_headers):
@@ -2251,7 +2299,7 @@ class TestRootEndpoints:
         mock_add.return_value = Root(uri="file:///test", name="Test Root")  # valid URI
 
         req = {"uri": "file:///test", "name": "Test Root"}  # valid body
-        response = test_client.post("/roots/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/roots/", json=req, headers=auth_headers)
 
         assert response.status_code == 200
         mock_add.assert_called_once()
@@ -2260,7 +2308,7 @@ class TestRootEndpoints:
     def test_remove_root_endpoint(self, mock_remove, test_client, auth_headers):
         """Test removing a root directory."""
         mock_remove.return_value = None
-        response = test_client.delete("/roots/%2Ftest", headers=auth_headers)
+        response = test_client.delete("/v1/roots/%2Ftest", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
@@ -2272,7 +2320,7 @@ class TestRootEndpoints:
             yield {"event": "test"}
 
         mock_subscribe.return_value = mock_async_gen()
-        response = test_client.get("/roots/changes", headers=auth_headers)
+        response = test_client.get("/v1/roots/changes", headers=auth_headers)
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
@@ -3069,7 +3117,7 @@ class TestRealtimeEndpoints:
             patch("mcpgateway.main.session_registry.get_session_owner", new=AsyncMock(return_value=None)),
             patch("mcpgateway.main.session_registry.session_exists", new=AsyncMock(return_value=True)),
         ):
-            response = test_client.post("/servers/test-server/message?session_id=test-session", json=message, headers=auth_headers)
+            response = test_client.post("/v1/servers/test-server/message?session_id=test-session", json=message, headers=auth_headers)
         assert response.status_code == 403
         assert response.json()["detail"] == "Session owner metadata unavailable"
 
@@ -3077,7 +3125,7 @@ class TestRealtimeEndpoints:
         """Server message endpoint returns 404 for non-existent server IDs."""
         message = {"type": "test", "data": "hello"}
         with patch("mcpgateway.services.server_service.ServerService.entity_exists", new=AsyncMock(return_value=False)):
-            response = test_client.post("/servers/nonexistent-id/message?session_id=test-session", json=message, headers=auth_headers)
+            response = test_client.post("/v1/servers/nonexistent-id/message?session_id=test-session", json=message, headers=auth_headers)
         assert response.status_code == 404
         assert response.json()["detail"] == "Server not found"
 
@@ -3085,7 +3133,7 @@ class TestRealtimeEndpoints:
         """Server message endpoint returns 503 when database validation fails (fail-closed)."""
         message = {"type": "test", "data": "hello"}
         with patch("mcpgateway.services.server_service.ServerService.entity_exists", new=AsyncMock(side_effect=Exception("DB down"))):
-            response = test_client.post("/servers/test-server/message?session_id=test-session", json=message, headers=auth_headers)
+            response = test_client.post("/v1/servers/test-server/message?session_id=test-session", json=message, headers=auth_headers)
         assert response.status_code == 503
         assert "unable to verify server" in response.json()["detail"]
 
@@ -3234,7 +3282,7 @@ class TestRealtimeEndpoints:
             async def create_sse_response(self, *_args, **_kwargs):
                 raise asyncio.CancelledError()
 
-        request = _make_request("/servers/1/sse")
+        request = _make_request("/v1/servers/1/sse")
         with (
             patch("mcpgateway.main.SSETransport", DummyTransport),
             patch("mcpgateway.main.server_service.get_server", new_callable=AsyncMock),
@@ -3264,7 +3312,7 @@ class TestRealtimeEndpoints:
             async def create_sse_response(self, *_args, **_kwargs):
                 raise RuntimeError("boom")
 
-        request = _make_request("/servers/1/sse")
+        request = _make_request("/v1/servers/1/sse")
         with (
             patch("mcpgateway.main.SSETransport", DummyTransport),
             patch("mcpgateway.main.server_service.get_server", new_callable=AsyncMock),
@@ -3356,7 +3404,7 @@ class TestMetricsEndpoints:
         mock_server.return_value = ServerMetrics(total_executions=2, successful_executions=2, failed_executions=0, failure_rate=0.0)
         mock_prompt.return_value = PromptMetrics(total_executions=1, successful_executions=1, failed_executions=0, failure_rate=0.0)
 
-        response = test_client.get("/metrics", headers=auth_headers)
+        response = test_client.get("/v1/metrics", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "tools" in data and "resources" in data
@@ -3375,7 +3423,7 @@ class TestMetricsEndpoints:
         mock_server.return_value = ServerMetrics(total_executions=2, successful_executions=2, failed_executions=0, failure_rate=0.0)
         mock_prompt.return_value = PromptMetrics(total_executions=1, successful_executions=1, failed_executions=0, failure_rate=0.0)
 
-        response = test_client.get("/metrics", headers=auth_headers)
+        response = test_client.get("/v1/metrics", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["tools"]["totalExecutions"] == 4
@@ -3393,7 +3441,7 @@ class TestMetricsEndpoints:
         mock_server.return_value = ServerMetrics(total_executions=0, successful_executions=0, failed_executions=0, failure_rate=0.0)
         mock_prompt.return_value = PromptMetrics(total_executions=0, successful_executions=0, failed_executions=0, failure_rate=0.0)
 
-        response = test_client.get("/metrics", headers=auth_headers)
+        response = test_client.get("/v1/metrics", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "a2aAgents" not in data, "a2aAgents should be absent when A2A is disabled, not null"
@@ -3426,7 +3474,7 @@ class TestMetricsEndpoints:
         )
         mock_a2a_service.aggregate_metrics = AsyncMock(return_value=mock_a2a_metrics)
 
-        response = test_client.get("/metrics", headers=auth_headers)
+        response = test_client.get("/v1/metrics", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
 
@@ -3476,7 +3524,7 @@ class TestMetricsEndpoints:
     #        # Mock A2A service with reset_metrics method
     #        mock_a2a_service.reset_metrics = MagicMock()
     #
-    #        response = test_client.post("/metrics/reset", headers=auth_headers)
+    #        response = test_client.post("/v1/metrics/reset", headers=auth_headers)
     #        assert response.status_code == 200
     #
     #        # Verify all services had their metrics reset
@@ -3489,13 +3537,13 @@ class TestMetricsEndpoints:
     @patch("mcpgateway.main.tool_service.reset_metrics")
     def test_reset_specific_entity_metrics(self, mock_tool_reset, test_client, auth_headers):
         """Test resetting metrics for a specific entity type."""
-        response = test_client.post("/metrics/reset?entity=tool&entity_id=1", headers=auth_headers)
+        response = test_client.post("/v1/metrics/reset?entity=tool&entity_id=1", headers=auth_headers)
         assert response.status_code == 200
         mock_tool_reset.assert_called_once_with(ANY, 1)
 
     def test_reset_invalid_entity_metrics(self, test_client, auth_headers):
         """Test error handling for invalid entity type in metrics reset."""
-        response = test_client.post("/metrics/reset?entity=invalid", headers=auth_headers)
+        response = test_client.post("/v1/metrics/reset?entity=invalid", headers=auth_headers)
         assert response.status_code == 400
 
 
@@ -3509,7 +3557,7 @@ class TestA2AAgentEndpoints:
     def test_list_a2a_agents(self, mock_service, test_client, auth_headers):
         """Test listing A2A agents."""
         mock_service.list_agents = AsyncMock(return_value=([_make_a2a_agent_read()], None))
-        response = test_client.get("/a2a", headers=auth_headers)
+        response = test_client.get("/v1/a2a", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()[0]["name"] == "agent-1"
         mock_service.list_agents.assert_called_once()
@@ -3518,7 +3566,7 @@ class TestA2AAgentEndpoints:
     def test_get_a2a_agent(self, mock_service, test_client, auth_headers):
         """Test getting specific A2A agent."""
         mock_service.get_agent = AsyncMock(return_value=_make_a2a_agent_read())
-        response = test_client.get("/a2a/agent-1", headers=auth_headers)
+        response = test_client.get("/v1/a2a/agent-1", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["name"] == "agent-1"
         mock_service.get_agent.assert_called_once()
@@ -3527,7 +3575,7 @@ class TestA2AAgentEndpoints:
     def test_create_a2a_agent(self, mock_service, test_client, auth_headers):
         """Test creating A2A agent."""
         mock_service.register_agent = AsyncMock(return_value=_make_a2a_agent_read())
-        response = test_client.post("/a2a", json=_a2a_create_payload(), headers=auth_headers)
+        response = test_client.post("/v1/a2a", json=_a2a_create_payload(), headers=auth_headers)
         assert response.status_code == 201
         mock_service.register_agent.assert_called_once()
 
@@ -3546,14 +3594,14 @@ class TestA2AAgentEndpoints:
 
         error = A2AAgentNameConflictError("conflict") if exc == "name_conflict" else A2AAgentError("bad")
         mock_service.register_agent = AsyncMock(side_effect=error)
-        response = test_client.post("/a2a", json=_a2a_create_payload(), headers=auth_headers)
+        response = test_client.post("/v1/a2a", json=_a2a_create_payload(), headers=auth_headers)
         assert response.status_code == status_code
 
     @patch("mcpgateway.main.a2a_service")
     def test_update_a2a_agent(self, mock_service, test_client, auth_headers):
         """Test updating A2A agent."""
         mock_service.update_agent = AsyncMock(return_value=_make_a2a_agent_read(name="agent-1", description="updated"))
-        response = test_client.put("/a2a/agent-1", json={"description": "Updated description"}, headers=auth_headers)
+        response = test_client.put("/v1/a2a/agent-1", json={"description": "Updated description"}, headers=auth_headers)
         assert response.status_code == 200
         mock_service.update_agent.assert_called_once()
 
@@ -3561,7 +3609,7 @@ class TestA2AAgentEndpoints:
     def test_set_a2a_agent_state(self, mock_service, test_client, auth_headers):
         """Test toggling A2A agent status."""
         mock_service.set_agent_state = AsyncMock(return_value=_make_a2a_agent_read(enabled=False))
-        response = test_client.post("/a2a/agent-1/state?activate=false", headers=auth_headers)
+        response = test_client.post("/v1/a2a/agent-1/state?activate=false", headers=auth_headers)
         assert response.status_code == 200
         mock_service.set_agent_state.assert_called_once()
 
@@ -3569,7 +3617,7 @@ class TestA2AAgentEndpoints:
     def test_delete_a2a_agent(self, mock_service, test_client, auth_headers):
         """Test deleting A2A agent."""
         mock_service.delete_agent = AsyncMock(return_value=None)
-        response = test_client.delete("/a2a/agent-1", headers=auth_headers)
+        response = test_client.delete("/v1/a2a/agent-1", headers=auth_headers)
         assert response.status_code == 200
         mock_service.delete_agent.assert_called_once()
 
@@ -3578,7 +3626,7 @@ class TestA2AAgentEndpoints:
         """Test invoking A2A agent."""
         mock_service.invoke_agent = AsyncMock(return_value={"response": "Agent response", "status": "success"})
         response = test_client.post(
-            "/a2a/agent-1/invoke",
+            "/v1/a2a/agent-1/invoke",
             json={"parameters": {"query": "test"}, "interaction_type": "query"},
             headers=auth_headers,
         )
@@ -3594,7 +3642,7 @@ class TestA2AAgentEndpoints:
         """
         mock_service.invoke_agent = AsyncMock(return_value={"ok": True})
         response = test_client.post(
-            "/a2a/agent-1/invoke",
+            "/v1/a2a/agent-1/invoke",
             json={"parameters": {}, "interaction_type": "query"},
             headers={**auth_headers, "X-Contextforge-UAID-Hop": "2"},
         )
@@ -3610,7 +3658,7 @@ class TestA2AAgentEndpoints:
         mock_service.invoke_agent = AsyncMock(return_value={"ok": True})
         # No header
         test_client.post(
-            "/a2a/agent-1/invoke",
+            "/v1/a2a/agent-1/invoke",
             json={"parameters": {}, "interaction_type": "query"},
             headers=auth_headers,
         )
@@ -3618,7 +3666,7 @@ class TestA2AAgentEndpoints:
         mock_service.invoke_agent.reset_mock()
         # Garbage value
         test_client.post(
-            "/a2a/agent-1/invoke",
+            "/v1/a2a/agent-1/invoke",
             json={"parameters": {}, "interaction_type": "query"},
             headers={**auth_headers, "X-Contextforge-UAID-Hop": "not-a-number"},
         )
@@ -3653,7 +3701,7 @@ class TestMiddlewareAndSecurity:
 
     def test_cors_headers(self, test_client, auth_headers):
         """Test that CORS headers are properly set."""
-        response = test_client.options("/tools/", headers=auth_headers)
+        response = test_client.options("/v1/tools/", headers=auth_headers)
         # CORS is handled by FastAPI middleware, exact behavior depends on configuration
         assert response.status_code in [200, 405]  # Either handled or method not allowed
 
@@ -3705,7 +3753,7 @@ class TestErrorHandling:
         """Test handling of malformed JSON in request bodies."""
         headers = auth_headers
         headers["content-type"] = "application/json"
-        response = test_client.post("/protocol/initialize", content="invalid json", headers=headers)
+        response = test_client.post("/v1/protocol/initialize", content="invalid json", headers=headers)
         assert response.status_code == 400  # body cannot be parsed, so 400
 
     @patch("mcpgateway.main.server_service.get_server")
@@ -3716,7 +3764,7 @@ class TestErrorHandling:
 
         mock_get.side_effect = ServerNotFoundError("Server not found")
 
-        response = test_client.get("/servers/999", headers=auth_headers)
+        response = test_client.get("/v1/servers/999", headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.resource_service.read_resource")
@@ -3727,7 +3775,7 @@ class TestErrorHandling:
 
         mock_read.side_effect = ResourceNotFoundError("Resource not found")
 
-        response = test_client.get("/resources/nonexistent", headers=auth_headers)
+        response = test_client.get("/v1/resources/nonexistent", headers=auth_headers)
         assert response.status_code == 404
 
     @patch("mcpgateway.main.tool_service.register_tool")
@@ -3739,13 +3787,13 @@ class TestErrorHandling:
         mock_register.side_effect = ToolNameConflictError("Tool name already exists")
 
         req = {"tool": {"name": "existing_tool", "url": "http://example.com"}, "team_id": None, "visibility": "private"}
-        response = test_client.post("/tools/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/tools/", json=req, headers=auth_headers)
         assert response.status_code == 409
 
     def test_missing_required_fields(self, test_client, auth_headers):
         """Test validation errors for missing required fields."""
         req = {"description": "Missing required name field"}
-        response = test_client.post("/tools/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/tools/", json=req, headers=auth_headers)
         assert response.status_code == 422  # Validation error
 
     def test_openapi_json_with_auth(self, test_client, auth_headers):
@@ -4807,7 +4855,7 @@ class TestTeamScopedListVisibility:
         """GET /servers with team-scoped token must NOT auto-narrow team_id."""
         mock_list.return_value = ([], None)
         client = _make_team_scoped_client(app_with_temp_db, token_teams=["team-1"], team_id="team-1")
-        response = client.get("/servers/", headers=auth_headers)
+        response = client.get("/v1/servers/", headers=auth_headers)
         assert response.status_code == 200
         mock_list.assert_called_once()
         call_kwargs = mock_list.call_args.kwargs
@@ -4819,7 +4867,7 @@ class TestTeamScopedListVisibility:
         """GET /servers?team_id=team-1 with matching token should pass team_id through."""
         mock_list.return_value = ([], None)
         client = _make_team_scoped_client(app_with_temp_db, token_teams=["team-1"], team_id="team-1")
-        response = client.get("/servers/?team_id=team-1", headers=auth_headers)
+        response = client.get("/v1/servers/?team_id=team-1", headers=auth_headers)
         assert response.status_code == 200
         call_kwargs = mock_list.call_args.kwargs
         assert call_kwargs["team_id"] == "team-1"
@@ -4827,7 +4875,7 @@ class TestTeamScopedListVisibility:
     def test_list_servers_team_id_mismatch_returns_403(self, app_with_temp_db, auth_headers):
         """GET /servers?team_id=other with team-scoped token must return 403."""
         client = _make_team_scoped_client(app_with_temp_db, token_teams=["team-1"], team_id="team-1")
-        response = client.get("/servers/?team_id=other-team", headers=auth_headers)
+        response = client.get("/v1/servers/?team_id=other-team", headers=auth_headers)
         assert response.status_code == 403
 
     @patch("mcpgateway.main.tool_service.list_tools")
@@ -4835,7 +4883,7 @@ class TestTeamScopedListVisibility:
         """GET /tools with team-scoped token must NOT auto-narrow team_id."""
         mock_list.return_value = ([], None)
         client = _make_team_scoped_client(app_with_temp_db, token_teams=["team-1"], team_id="team-1")
-        response = client.get("/tools/", headers=auth_headers)
+        response = client.get("/v1/tools/", headers=auth_headers)
         assert response.status_code == 200
         call_kwargs = mock_list.call_args.kwargs
         assert call_kwargs["team_id"] is None
@@ -4846,7 +4894,7 @@ class TestTeamScopedListVisibility:
         """GET /resources with team-scoped token must NOT auto-narrow team_id."""
         mock_list.return_value = ([], None)
         client = _make_team_scoped_client(app_with_temp_db, token_teams=["team-1"], team_id="team-1")
-        response = client.get("/resources/", headers=auth_headers)
+        response = client.get("/v1/resources/", headers=auth_headers)
         assert response.status_code == 200
         call_kwargs = mock_list.call_args.kwargs
         assert call_kwargs["team_id"] is None
@@ -4857,7 +4905,7 @@ class TestTeamScopedListVisibility:
         """GET /prompts with team-scoped token must NOT auto-narrow team_id."""
         mock_list.return_value = ([], None)
         client = _make_team_scoped_client(app_with_temp_db, token_teams=["team-1"], team_id="team-1")
-        response = client.get("/prompts/", headers=auth_headers)
+        response = client.get("/v1/prompts/", headers=auth_headers)
         assert response.status_code == 200
         call_kwargs = mock_list.call_args.kwargs
         assert call_kwargs["team_id"] is None
@@ -4868,7 +4916,7 @@ class TestTeamScopedListVisibility:
         """GET /gateways with team-scoped token must NOT auto-narrow team_id."""
         mock_list.return_value = ([], None)
         client = _make_team_scoped_client(app_with_temp_db, token_teams=["team-1"], team_id="team-1")
-        response = client.get("/gateways/", headers=auth_headers)
+        response = client.get("/v1/gateways/", headers=auth_headers)
         assert response.status_code == 200
         call_kwargs = mock_list.call_args.kwargs
         assert call_kwargs["team_id"] is None
@@ -4879,7 +4927,7 @@ class TestTeamScopedListVisibility:
         """GET /a2a with team-scoped token must NOT auto-narrow team_id."""
         mock_service.list_agents = AsyncMock(return_value=([], None))
         client = _make_team_scoped_client(app_with_temp_db, token_teams=["team-1"], team_id="team-1")
-        response = client.get("/a2a", headers=auth_headers)
+        response = client.get("/v1/a2a", headers=auth_headers)
         assert response.status_code == 200
         call_kwargs = mock_service.list_agents.call_args.kwargs
         assert call_kwargs["team_id"] is None

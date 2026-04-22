@@ -648,7 +648,7 @@ class TestInternalTrustedMcpTransportBridge:
         await bridge.handle_streamable_http(scope, receive, send)
 
         assert observed["path"] == "/mcp/"
-        assert observed["modified_path"] == "/servers/server-1/mcp"
+        assert observed["modified_path"] == "/v1/servers/server-1/mcp"
         assert observed["user_context"]["email"] == "user@example.com"
         assert observed["user_context"]["teams"] == ["team-a"]
         assert observed["user_context"]["auth_method"] == "jwt"
@@ -772,7 +772,7 @@ class TestInternalTrustedMcpTransportBridge:
         await bridge.handle_streamable_http(scope, receive, send)
 
         assert observed["method"] == "POST"
-        assert observed["modified_path"] == "/servers/server-1/mcp"
+        assert observed["modified_path"] == "/v1/servers/server-1/mcp"
         assert observed["body"]["body"] == b'{"jsonrpc":"2.0","id":1}'
         assert events[0]["status"] == 200
 
@@ -807,7 +807,7 @@ class TestInternalTrustedMcpTransportBridge:
         """Synthetic auth scope should preserve the public MCP path and client IP."""
         scope = _build_internal_mcp_auth_scope(
             method="post",
-            path="/servers/server-1/mcp",
+            path="/v1/servers/server-1/mcp",
             query_string="session_id=abc123",
             headers={"Authorization": "Bearer token", "X-Test": "value"},
             client_ip="203.0.113.10",
@@ -815,8 +815,8 @@ class TestInternalTrustedMcpTransportBridge:
 
         assert scope["type"] == "http"
         assert scope["method"] == "POST"
-        assert scope["path"] == "/servers/server-1/mcp"
-        assert scope["raw_path"] == b"/servers/server-1/mcp"
+        assert scope["path"] == "/v1/servers/server-1/mcp"
+        assert scope["raw_path"] == b"/v1/servers/server-1/mcp"
         assert scope["query_string"] == b"session_id=abc123"
         assert scope["client"] == ("203.0.113.10", 0)
         assert (b"authorization", b"Bearer token") in scope["headers"]
@@ -899,7 +899,7 @@ class TestInternalTrustedMcpTransportBridge:
         request.json = AsyncMock(
             return_value={
                 "method": "POST",
-                "path": "/servers/server-1/mcp",
+                "path": "/v1/servers/server-1/mcp",
                 "queryString": "session_id=abc123",
                 "headers": {"authorization": "Bearer token"},
                 "clientIp": "203.0.113.10",
@@ -1389,7 +1389,7 @@ class TestEndpointErrorHandling:
         """Test server endpoints with various error conditions."""
         # Test server creation with missing required fields (triggers validation)
         req = {"description": "Missing name"}
-        response = test_client.post("/servers/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/servers/", json=req, headers=auth_headers)
         # Should handle validation error appropriately
         assert response.status_code == 422
 
@@ -1402,21 +1402,21 @@ class TestEndpointErrorHandling:
 
             mock_read.side_effect = ResourceNotFoundError("Resource not found")
 
-            response = test_client.get("/resources/test/resource", headers=auth_headers)
+            response = test_client.get("/v1/resources/test/resource", headers=auth_headers)
             assert response.status_code == 404
 
     def test_prompt_endpoints_error_conditions(self, test_client, auth_headers):
         """Test prompt endpoints with various error conditions."""
         # Test prompt creation with missing required fields
         req = {"description": "Missing name and template"}
-        response = test_client.post("/prompts/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/prompts/", json=req, headers=auth_headers)
         assert response.status_code == 422
 
     def test_gateway_endpoints_error_conditions(self, test_client, auth_headers):
         """Test gateway endpoints with various error conditions."""
         # Test gateway creation with missing required fields
         req = {"description": "Missing name and url"}
-        response = test_client.post("/gateways/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/gateways/", json=req, headers=auth_headers)
         assert response.status_code == 422
 
 
@@ -1797,7 +1797,7 @@ class TestApijsonpathHTTP:
 
     def test_list_tools_apijsonpath_via_http(self, test_client, auth_headers):
         """GET /tools?apijsonpath=... should return 200 with JSONPath applied."""
-        resp = test_client.get("/tools/", headers=auth_headers, params={"apijsonpath": '{"jsonpath":"$[*].name"}'})
+        resp = test_client.get("/v1/tools/", headers=auth_headers, params={"apijsonpath": '{"jsonpath":"$[*].name"}'})
         assert resp.status_code == 200
         data = resp.json()
         # jsonpath_modifier returns a list of matched values (may be empty)
@@ -1805,13 +1805,13 @@ class TestApijsonpathHTTP:
 
     def test_list_tools_apijsonpath_invalid_json_via_http(self, test_client, auth_headers):
         """GET /tools?apijsonpath={bad should return 400."""
-        resp = test_client.get("/tools/", headers=auth_headers, params={"apijsonpath": "{bad json"})
+        resp = test_client.get("/v1/tools/", headers=auth_headers, params={"apijsonpath": "{bad json"})
         assert resp.status_code == 400
 
     def test_list_tools_apijsonpath_pagination_via_http(self, test_client, auth_headers):
         """GET /tools?apijsonpath=...&include_pagination=true should use nextCursor key."""
         resp = test_client.get(
-            "/tools/",
+            "/v1/tools/",
             headers=auth_headers,
             params={"apijsonpath": '{"jsonpath":"$[*].name"}', "include_pagination": "true"},
         )
@@ -1928,7 +1928,7 @@ class TestAdminAuthMiddleware:
     @pytest.mark.asyncio
     async def test_admin_auth_bypasses_when_auth_disabled(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools")
+        request = _make_request("/v1/admin/tools")
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", False)
@@ -1940,7 +1940,7 @@ class TestAdminAuthMiddleware:
     @pytest.mark.asyncio
     async def test_admin_auth_invalid_jwt_returns_401(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", headers={"Authorization": "Bearer token"})
+        request = _make_request("/v1/admin/tools", headers={"Authorization": "Bearer token"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -1953,7 +1953,7 @@ class TestAdminAuthMiddleware:
     async def test_admin_auth_revoked_token_redirects(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token", "accept": "text/html"},
         )
         call_next = AsyncMock(return_value="ok")
@@ -1973,7 +1973,7 @@ class TestAdminAuthMiddleware:
         """HTMX partial requests must receive HX-Redirect header instead of 302 redirect (issue #2874)."""
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token", "accept": "text/html", "hx-request": "true"},
         )
         call_next = AsyncMock(return_value="ok")
@@ -1986,7 +1986,7 @@ class TestAdminAuthMiddleware:
             response = await middleware.dispatch(request, call_next)
 
         assert response.status_code == 200
-        assert "/admin/login" in response.headers.get("hx-redirect", "")
+        assert "/v1/admin/login" in response.headers.get("hx-redirect", "")
         assert "token_revoked" in response.headers.get("hx-redirect", "")
 
     @pytest.mark.asyncio
@@ -1994,7 +1994,7 @@ class TestAdminAuthMiddleware:
         """HTMX requests without valid auth must get HX-Redirect, not 302 (issue #2874)."""
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"hx-request": "true"},
         )
         call_next = AsyncMock(return_value="ok")
@@ -2004,12 +2004,12 @@ class TestAdminAuthMiddleware:
             response = await middleware.dispatch(request, call_next)
 
         assert response.status_code == 200
-        assert "/admin/login" in response.headers.get("hx-redirect", "")
+        assert "/v1/admin/login" in response.headers.get("hx-redirect", "")
 
     @pytest.mark.asyncio
     async def test_admin_auth_api_token_expired(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", headers={"Authorization": "Bearer token"})
+        request = _make_request("/v1/admin/tools", headers={"Authorization": "Bearer token"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2025,7 +2025,7 @@ class TestAdminAuthMiddleware:
     async def test_admin_auth_proxy_user_allows_access(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
         proxy_header = settings.proxy_user_header
-        request = _make_request("/admin/tools", headers={proxy_header: "proxy@example.com"})
+        request = _make_request("/v1/admin/tools", headers={proxy_header: "proxy@example.com"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2062,7 +2062,7 @@ class TestAdminAuthMiddleware:
     @pytest.mark.asyncio
     async def test_admin_auth_platform_admin_bootstrap(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", headers={"Authorization": "Bearer token"})
+        request = _make_request("/v1/admin/tools", headers={"Authorization": "Bearer token"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2090,7 +2090,7 @@ class TestAdminAuthMiddleware:
     @pytest.mark.asyncio
     async def test_admin_auth_non_admin_denied(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", headers={"Authorization": "Bearer token"})
+        request = _make_request("/v1/admin/tools", headers={"Authorization": "Bearer token"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2122,7 +2122,7 @@ class TestAdminAuthMiddleware:
     async def test_admin_auth_public_only_admin_token_denied(self, monkeypatch):
         """teams=[] tokens are public-only and must not pass admin middleware."""
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", headers={"Authorization": "Bearer token", "accept": "application/json"})
+        request = _make_request("/v1/admin/tools", headers={"Authorization": "Bearer token", "accept": "application/json"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2137,7 +2137,7 @@ class TestAdminAuthMiddleware:
     async def test_admin_auth_explicit_null_teams_admin_bypass_allowed(self, monkeypatch):
         """teams=null + is_admin=true should preserve unrestricted admin middleware behavior."""
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", headers={"Authorization": "Bearer token"})
+        request = _make_request("/v1/admin/tools", headers={"Authorization": "Bearer token"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2168,7 +2168,7 @@ class TestAdminAuthMiddleware:
     async def test_admin_auth_session_token_resolves_teams_from_db(self, monkeypatch):
         """Session tokens should resolve team scope via DB helper before admin path checks."""
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", headers={"Authorization": "Bearer token"})
+        request = _make_request("/v1/admin/tools", headers={"Authorization": "Bearer token"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2208,11 +2208,11 @@ class TestAdminAuthMiddleware:
     @pytest.mark.parametrize(
         "path",
         [
-            "/admin/login",
-            "/admin/logout",
-            "/admin/forgot-password",
-            "/admin/reset-password/token-123",
-            "/admin/static/app.css",
+            "/v1/admin/login",
+            "/v1/admin/logout",
+            "/v1/admin/forgot-password",
+            "/v1/admin/reset-password/token-123",
+            "/v1/admin/static/app.css",
         ],
     )
     async def test_admin_auth_exempt_paths_call_next_when_auth_required(self, monkeypatch, path):
@@ -2252,7 +2252,7 @@ class TestAdminAuthMiddleware:
     async def test_admin_auth_root_path_slash_does_not_break_paths(self, monkeypatch):
         """root_path of '/' must be ignored so /admin routes are still detected."""
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/login", root_path="/")
+        request = _make_request("/v1/admin/login", root_path="/")
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2274,7 +2274,7 @@ class TestAdminAuthMiddleware:
         response = await middleware.dispatch(request, call_next)
         # No credentials: should redirect to login (302), not pass through
         assert response.status_code == 302
-        assert "/admin/login" in response.headers.get("location", "")
+        assert "/v1/admin/login" in response.headers.get("location", "")
         call_next.assert_not_called()
 
     @pytest.mark.asyncio
@@ -2288,14 +2288,14 @@ class TestAdminAuthMiddleware:
 
         response = await middleware.dispatch(request, call_next)
         assert response.status_code == 302
-        assert "/admin/login" in response.headers.get("location", "")
+        assert "/v1/admin/login" in response.headers.get("location", "")
         call_next.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_admin_auth_cookie_token_revocation_check_failure_still_allows(self, monkeypatch):
         """Cover cookie token extraction + revocation check failure path."""
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
+        request = _make_request("/v1/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2330,7 +2330,7 @@ class TestAdminAuthMiddleware:
     async def test_admin_auth_api_token_revoked_and_success(self, monkeypatch):
         """Cover API token revoked and valid branches (when JWT validation fails)."""
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
+        request = _make_request("/v1/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2366,7 +2366,7 @@ class TestAdminAuthMiddleware:
     @pytest.mark.asyncio
     async def test_admin_auth_user_not_found_returns_401(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
+        request = _make_request("/v1/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2392,7 +2392,7 @@ class TestAdminAuthMiddleware:
     @pytest.mark.asyncio
     async def test_admin_auth_user_not_found_browser_redirects_to_login(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "text/html"})
+        request = _make_request("/v1/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "text/html"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2414,12 +2414,12 @@ class TestAdminAuthMiddleware:
             response = await middleware.dispatch(request, call_next)
 
         assert response.status_code == 302
-        assert "/admin/login" in response.headers.get("location", "")
+        assert "/v1/admin/login" in response.headers.get("location", "")
 
     @pytest.mark.asyncio
     async def test_admin_auth_disabled_user_returns_403(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
+        request = _make_request("/v1/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2445,7 +2445,7 @@ class TestAdminAuthMiddleware:
     @pytest.mark.asyncio
     async def test_admin_auth_http_exception_and_general_exception_paths(self, monkeypatch):
         middleware = AdminAuthMiddleware(None)
-        request = _make_request("/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
+        request = _make_request("/v1/admin/tools", cookies={"jwt_token": "token"}, headers={"accept": "application/json"})
         call_next = AsyncMock(return_value="ok")
 
         monkeypatch.setattr(settings, "auth_required", True)
@@ -2486,7 +2486,7 @@ class TestAdminAuthMiddleware:
         """User with only team-scoped admin.dashboard should pass when request has valid team_id."""
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token"},
             query_params={"team_id": "a1b2c3d4e5f6789012345678abcdef01"},
         )
@@ -2528,7 +2528,7 @@ class TestAdminAuthMiddleware:
         """team_id not in user's teams should be ignored (falls back to global check)."""
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token"},
             query_params={"team_id": "00000000000000000000000000000099"},
         )
@@ -2569,7 +2569,7 @@ class TestAdminAuthMiddleware:
         """Request without team_id should check global permissions only (original behavior)."""
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token"},
         )
         call_next = AsyncMock(return_value="ok")
@@ -2608,7 +2608,7 @@ class TestAdminAuthMiddleware:
         """Empty string team_id in query params should be treated as absent."""
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token"},
             query_params={"team_id": ""},
         )
@@ -2648,7 +2648,7 @@ class TestAdminAuthMiddleware:
         """Admin bypass (token_teams=None) should ignore team_id in query and pass None."""
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token"},
             query_params={"team_id": "a1b2c3d4e5f6789012345678abcdef01"},
         )
@@ -2690,7 +2690,7 @@ class TestAdminAuthMiddleware:
         middleware = AdminAuthMiddleware(None)
         # Hyphenated form of the same UUID
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token"},
             query_params={"team_id": "a1b2c3d4-e5f6-7890-1234-5678abcdef01"},
         )
@@ -2731,7 +2731,7 @@ class TestAdminAuthMiddleware:
         """Non-UUID team_id in query params should be treated as absent (not a valid UUID)."""
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token"},
             query_params={"team_id": "not-a-valid-uuid"},
         )
@@ -2774,7 +2774,7 @@ class TestAdminAuthMiddleware:
 
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token"},
         )
         # Simulate repeated keys — .get() returns the last value
@@ -2815,7 +2815,7 @@ class TestAdminAuthMiddleware:
         """Non-UUID team_id should still match when token_teams contains the same non-UUID string (legacy/CLI tokens)."""
         middleware = AdminAuthMiddleware(None)
         request = _make_request(
-            "/admin/tools",
+            "/v1/admin/tools",
             headers={"Authorization": "Bearer token"},
             query_params={"team_id": "team-slug-123"},
         )
@@ -2860,7 +2860,7 @@ class TestMCPPathRewriteMiddleware:
     async def test_rewrite_mcp_path(self):
         app_mock = AsyncMock()
         middleware = MCPPathRewriteMiddleware(app_mock)
-        scope = {"type": "http", "path": "/servers/123/mcp", "headers": []}
+        scope = {"type": "http", "path": "/v1/servers/123/mcp", "headers": []}
         receive = AsyncMock()
         send = AsyncMock()
 
@@ -2874,7 +2874,7 @@ class TestMCPPathRewriteMiddleware:
     async def test_rewrite_auth_failure(self):
         app_mock = AsyncMock()
         middleware = MCPPathRewriteMiddleware(app_mock)
-        scope = {"type": "http", "path": "/servers/123/mcp", "headers": []}
+        scope = {"type": "http", "path": "/v1/servers/123/mcp", "headers": []}
         receive = AsyncMock()
         send = AsyncMock()
 
@@ -2889,7 +2889,7 @@ class TestMCPPathRewriteMiddleware:
         response = StarletteResponse("ok")
         dispatch = AsyncMock(return_value=response)
         middleware = MCPPathRewriteMiddleware(app_mock, dispatch=dispatch)
-        scope = {"type": "http", "path": "/servers/123/mcp", "headers": []}
+        scope = {"type": "http", "path": "/v1/servers/123/mcp", "headers": []}
         receive = AsyncMock()
         send = AsyncMock()
 
@@ -2903,7 +2903,7 @@ class TestMCPPathRewriteMiddleware:
         """Middleware returns 404 for /servers//mcp (empty server ID)."""
         app_mock = AsyncMock()
         middleware = MCPPathRewriteMiddleware(app_mock)
-        scope = {"type": "http", "path": "/servers//mcp", "headers": []}
+        scope = {"type": "http", "path": "/v1/servers//mcp", "headers": []}
         receive = AsyncMock()
         sent = []
 
@@ -3001,7 +3001,7 @@ class TestMCPPathRewriteMiddleware:
 
         # modified_path MUST be app-relative (without root_path prefix)
         # so streamablehttp_transport can extract server_id via regex
-        assert scope["modified_path"] == "/servers/abc123/mcp"
+        assert scope["modified_path"] == "/v1/servers/abc123/mcp"
         # path is rewritten with root_path prefix preserved
         assert scope["path"] == "/gateway/mcp/"
         app_mock.assert_called_once()
@@ -3011,14 +3011,14 @@ class TestMCPPathRewriteMiddleware:
         """When no root_path, modified_path equals original path."""
         app_mock = AsyncMock()
         middleware = MCPPathRewriteMiddleware(app_mock)
-        scope = {"type": "http", "path": "/servers/xyz789/mcp", "headers": []}
+        scope = {"type": "http", "path": "/v1/servers/xyz789/mcp", "headers": []}
         receive, send = AsyncMock(), AsyncMock()
 
         with patch("mcpgateway.main.streamable_http_auth", return_value=True):
             await middleware._call_streamable_http(scope, receive, send)
 
         # Without root_path, modified_path should equal the normalized path
-        assert scope["modified_path"] == "/servers/xyz789/mcp"
+        assert scope["modified_path"] == "/v1/servers/xyz789/mcp"
         assert scope["path"] == "/mcp/"
         app_mock.assert_called_once()
 
@@ -3406,7 +3406,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_tool_success(self, monkeypatch, allow_permission):
-        request = _make_request("/tools")
+        request = _make_request("/v1/tools")
         request.state = SimpleNamespace(team_id=None)
 
         tool = MagicMock()
@@ -3429,7 +3429,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_tool_team_mismatch(self, allow_permission):
-        request = _make_request("/tools")
+        request = _make_request("/v1/tools")
         request.state = SimpleNamespace(team_id="team-1")
 
         tool_input = ToolCreate(name="tool-a", url="http://example.com")
@@ -3438,7 +3438,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_update_tool_success(self, monkeypatch, allow_permission):
-        request = _make_request("/tools/tool-1")
+        request = _make_request("/v1/tools/tool-1")
         db = MagicMock()
         db.get.return_value = SimpleNamespace(version=2)
 
@@ -3475,7 +3475,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_resource_success(self, monkeypatch, allow_permission):
-        request = _make_request("/resources")
+        request = _make_request("/v1/resources")
         request.state = SimpleNamespace(team_id=None)
 
         resource = MagicMock()
@@ -3498,7 +3498,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_update_resource_success(self, monkeypatch, allow_permission):
-        request = _make_request("/resources/res-1")
+        request = _make_request("/v1/resources/res-1")
         monkeypatch.setattr(
             "mcpgateway.main.MetadataCapture.extract_modification_metadata",
             lambda *_args, **_kwargs: {
@@ -3532,7 +3532,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_prompt_success(self, monkeypatch, allow_permission):
-        request = _make_request("/prompts")
+        request = _make_request("/v1/prompts")
         request.state = SimpleNamespace(team_id=None)
 
         prompt = MagicMock()
@@ -3555,7 +3555,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_update_prompt_success(self, monkeypatch, allow_permission):
-        request = _make_request("/prompts/prompt-1")
+        request = _make_request("/v1/prompts/prompt-1")
         monkeypatch.setattr(
             "mcpgateway.main.MetadataCapture.extract_modification_metadata",
             lambda *_args, **_kwargs: {
@@ -3588,7 +3588,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_tool_public_only_token_blocks_team_private_visibility(self, monkeypatch, allow_permission):
-        request = _make_request("/tools")
+        request = _make_request("/v1/tools")
         request.state = SimpleNamespace(team_id=None, token_teams=[])
 
         tool_input = ToolCreate(name="tool-a", url="http://example.com", visibility="team")
@@ -3597,7 +3597,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_tool_public_only_token_forces_team_id_none(self, monkeypatch, allow_permission):
-        request = _make_request("/tools")
+        request = _make_request("/v1/tools")
         request.state = SimpleNamespace(team_id="team-1", token_teams=[])
 
         monkeypatch.setattr(
@@ -3621,7 +3621,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_tool_name_conflict_inactive_suggests_activation(self, monkeypatch, allow_permission):
-        request = _make_request("/tools")
+        request = _make_request("/v1/tools")
         request.state = SimpleNamespace(team_id=None, token_teams=None)
 
         monkeypatch.setattr(
@@ -3649,7 +3649,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_tool_tool_error_and_unexpected_error(self, monkeypatch, allow_permission):
-        request = _make_request("/tools")
+        request = _make_request("/v1/tools")
         request.state = SimpleNamespace(team_id=None, token_teams=None)
 
         monkeypatch.setattr(
@@ -3680,7 +3680,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_update_tool_tool_error_and_unexpected_error(self, monkeypatch, allow_permission):
-        request = _make_request("/tools/tool-1")
+        request = _make_request("/v1/tools/tool-1")
         db = MagicMock()
         db.get.return_value = SimpleNamespace(version=0)
 
@@ -3725,7 +3725,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_resource_public_only_token_team_visibility_forbidden(self, monkeypatch, allow_permission):
-        request = _make_request("/resources")
+        request = _make_request("/v1/resources")
         request.state = SimpleNamespace(team_id=None, token_teams=[])
 
         resource_input = ResourceCreate(uri="res://1", name="Res", content="data")
@@ -3734,7 +3734,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_resource_team_mismatch_returns_403(self, allow_permission):
-        request = _make_request("/resources")
+        request = _make_request("/v1/resources")
         request.state = SimpleNamespace(team_id="team-1", token_teams=["team-1"])
 
         resource_input = ResourceCreate(uri="res://1", name="Res", content="data")
@@ -3743,7 +3743,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_resource_public_only_token_forces_team_id_none(self, monkeypatch, allow_permission):
-        request = _make_request("/resources")
+        request = _make_request("/v1/resources")
         request.state = SimpleNamespace(team_id="team-1", token_teams=[])
 
         monkeypatch.setattr(
@@ -3767,7 +3767,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_resource_validation_error_and_integrity_error(self, monkeypatch, allow_permission):
-        request = _make_request("/resources")
+        request = _make_request("/v1/resources")
         request.state = SimpleNamespace(team_id=None, token_teams=None)
 
         monkeypatch.setattr(
@@ -3813,7 +3813,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_update_resource_uri_conflict_maps_to_409(self, monkeypatch, allow_permission):
-        request = _make_request("/resources/res-1")
+        request = _make_request("/v1/resources/res-1")
         monkeypatch.setattr(
             "mcpgateway.main.MetadataCapture.extract_modification_metadata",
             lambda *_args, **_kwargs: {
@@ -3853,19 +3853,19 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_prompt_public_only_and_error_branches(self, monkeypatch, allow_permission):
-        request = _make_request("/prompts")
+        request = _make_request("/v1/prompts")
         request.state = SimpleNamespace(team_id="team-1", token_teams=[])
 
         prompt_input = PromptCreate(name="Prompt A", template="Hello")
         response = await create_prompt(prompt_input, request, visibility="team", db=MagicMock(), user={"email": "user@example.com"})
         assert response.status_code == 403
 
-        request2 = _make_request("/prompts")
+        request2 = _make_request("/v1/prompts")
         request2.state = SimpleNamespace(team_id="team-1", token_teams=["team-1"])
         response = await create_prompt(prompt_input, request2, team_id="team-2", visibility="public", db=MagicMock(), user={"email": "user@example.com"})
         assert response.status_code == 403
 
-        request3 = _make_request("/prompts")
+        request3 = _make_request("/v1/prompts")
         request3.state = SimpleNamespace(team_id="team-1", token_teams=[])
         monkeypatch.setattr(
             "mcpgateway.main.MetadataCapture.extract_creation_metadata",
@@ -3920,7 +3920,7 @@ class TestCrudEndpoints:
 
     @pytest.mark.asyncio
     async def test_update_prompt_name_conflict_prompt_error_and_unexpected(self, monkeypatch, allow_permission):
-        request = _make_request("/prompts/prompt-1")
+        request = _make_request("/v1/prompts/prompt-1")
         monkeypatch.setattr(
             "mcpgateway.main.MetadataCapture.extract_modification_metadata",
             lambda *_args, **_kwargs: {
@@ -5064,7 +5064,7 @@ class TestUtilityFunctions:
         if response.status_code == 303:
             # UI enabled: redirects to /admin/
             location = response.headers.get("location", "")
-            assert "/admin/" in location
+            assert "/v1/admin/" in location
         elif response.status_code == 200:
             # Could be JSON (UI disabled) or HTML (followed redirect to admin)
             content_type = response.headers.get("content-type", "")
@@ -5080,7 +5080,7 @@ class TestUtilityFunctions:
         """Test exception handlers with various scenarios."""
         # Test simple validation error by providing invalid data
         req = {"invalid": "data"}  # Missing required 'name' field
-        response = test_client.post("/servers/", json=req, headers=auth_headers)
+        response = test_client.post("/v1/servers/", json=req, headers=auth_headers)
         # Should handle validation error
         assert response.status_code == 422
 
@@ -5438,7 +5438,7 @@ class TestUtilityFunctions:
             # Test SSE transport creation error
             mock_transport_class.side_effect = Exception("SSE error")
 
-            response = test_client.get("/servers/test/sse", headers=auth_headers)
+            response = test_client.get("/v1/servers/test/sse", headers=auth_headers)
             # Should handle SSE creation error
             assert response.status_code in [404, 500, 503]
 
@@ -5559,13 +5559,13 @@ class TestUtilityFunctions:
             mock_toggle.return_value = ServerRead(**mock_server_data)
 
             # Test activate=true
-            response = test_client.post("/servers/1/state?activate=true", headers=auth_headers)
+            response = test_client.post("/v1/servers/1/state?activate=true", headers=auth_headers)
             assert response.status_code == 200
 
             # Test activate=false
             mock_server_data["enabled"] = False
             mock_toggle.return_value = ServerRead(**mock_server_data)
-            response = test_client.post("/servers/1/state?activate=false", headers=auth_headers)
+            response = test_client.post("/v1/servers/1/state?activate=false", headers=auth_headers)
             assert response.status_code == 200
 
 
@@ -5744,7 +5744,7 @@ class TestA2AEndpoints:
         ):
             mock_service.register_agent = AsyncMock(return_value=self._agent_read())
             payload = {"agent": {"name": "Agent One", "endpoint_url": "http://example.com/agent"}, "team_id": None, "visibility": "public"}
-            response = test_client.post("/a2a", json=payload, headers=auth_headers)
+            response = test_client.post("/v1/a2a", json=payload, headers=auth_headers)
             assert response.status_code == 201
             assert response.json()["name"] == "Agent One"
 
@@ -5758,14 +5758,14 @@ class TestA2AEndpoints:
         ):
             mock_service.update_agent = AsyncMock(return_value=self._agent_read("agent-2"))
             payload = {"agent": {"name": "Agent Two", "endpoint_url": "http://example.com/agent-two"}}
-            response = test_client.put("/a2a/agent-2", json=payload, headers=auth_headers)
+            response = test_client.put("/v1/a2a/agent-2", json=payload, headers=auth_headers)
             assert response.status_code == 200
             assert response.json()["id"] == "agent-2"
 
     def test_delete_a2a_agent(self, test_client, auth_headers):
         with patch("mcpgateway.main.a2a_service") as mock_service:
             mock_service.delete_agent = AsyncMock()
-            response = test_client.delete("/a2a/agent-3", headers=auth_headers)
+            response = test_client.delete("/v1/a2a/agent-3", headers=auth_headers)
             assert response.status_code == 200
             assert response.json()["status"] == "success"
 
@@ -5773,7 +5773,7 @@ class TestA2AEndpoints:
         with patch("mcpgateway.main.a2a_service") as mock_service:
             mock_service.invoke_agent = AsyncMock(return_value={"ok": True})
             response = test_client.post(
-                "/a2a/agent-4/invoke",
+                "/v1/a2a/agent-4/invoke",
                 json={"parameters": {"query": "hello"}, "interaction_type": "query"},
                 headers=auth_headers,
             )
@@ -10880,7 +10880,7 @@ class TestRemainingCoverageGaps:
         # First-Party
         import mcpgateway.main as main_mod
 
-        request = _make_request("/servers")
+        request = _make_request("/v1/servers")
         request.state = SimpleNamespace(team_id="team-1", token_teams=[])
         server_obj = MagicMock()
 
@@ -10935,7 +10935,7 @@ class TestRemainingCoverageGaps:
         # First-Party
         import mcpgateway.main as main_mod
 
-        request = _make_request("/gateways")
+        request = _make_request("/v1/gateways")
         request.state = SimpleNamespace(team_id="team-1", token_teams=[])
 
         gateway_obj = SimpleNamespace(team_id="team-1", visibility="team")
@@ -11858,7 +11858,7 @@ class TestRemainingCoverageGaps:
         # First-Party
         import mcpgateway.main as main_mod
 
-        request = _make_request("/a2a/a1")
+        request = _make_request("/v1/a2a/a1")
         monkeypatch.setattr(
             main_mod.MetadataCapture,
             "extract_modification_metadata",
@@ -11976,7 +11976,7 @@ class TestRemainingCoverageGaps:
         import mcpgateway.main as main_mod
         from mcpgateway.services.server_service import ServerNameConflictError
 
-        request = _make_request("/servers/s1")
+        request = _make_request("/v1/servers/s1")
         monkeypatch.setattr(
             main_mod.MetadataCapture,
             "extract_modification_metadata",
@@ -12007,8 +12007,8 @@ class TestRemainingCoverageGaps:
         # First-Party
         import mcpgateway.main as main_mod
 
-        request = _make_request("/tags")
-        monkeypatch.setattr(main_mod, "get_rpc_filter_context", lambda _request, _user: ("u", [], False))
+        request = _make_request("/v1/tags")
+        monkeypatch.setattr(main_mod, "_get_rpc_filter_context", lambda _request, _user: ("u", [], False))
 
         monkeypatch.setattr(main_mod.tag_service, "get_all_tags", AsyncMock(return_value=[]))
         _ = await main_mod.list_tags.__wrapped__(request, "Tools, Servers", include_entities=False, db=MagicMock(), user={"email": "u"})
@@ -12020,7 +12020,7 @@ class TestRemainingCoverageGaps:
         # First-Party
         import mcpgateway.main as main_mod
 
-        request = _make_request("/a2a/a1")
+        request = _make_request("/v1/a2a/a1")
         monkeypatch.setattr(main_mod, "a2a_service", None)
 
         with pytest.raises(HTTPException) as excinfo:
@@ -12031,7 +12031,7 @@ class TestRemainingCoverageGaps:
         # First-Party
         import mcpgateway.main as main_mod
 
-        request = _make_request("/a2a")
+        request = _make_request("/v1/a2a")
         request.state = SimpleNamespace(team_id="team-1", token_teams=[])
 
         monkeypatch.setattr(
@@ -12084,7 +12084,7 @@ class TestRemainingCoverageGaps:
         import mcpgateway.main as main_mod
         from mcpgateway.services.resource_service import ResourceError
 
-        request = _make_request("/resources")
+        request = _make_request("/v1/resources")
         request.state = SimpleNamespace(team_id=None, token_teams=["team-1"])
 
         monkeypatch.setattr(
@@ -12128,7 +12128,7 @@ class TestRemainingCoverageGaps:
         import mcpgateway.main as main_mod
 
         request = MagicMock(spec=Request)
-        request.url = SimpleNamespace(path="/tools")
+        request.url = SimpleNamespace(path="/v1/tools")
 
         exc = MagicMock()
         exc.errors.return_value = [{"loc": ["body"], "msg": "bad", "ctx": "ctx-not-a-dict", "type": "value_error"}]
@@ -12143,7 +12143,7 @@ class TestRemainingCoverageGaps:
         class FakeValidationError(Exception):
             """ValidationError branch in update_gateway is unreachable for pydantic.ValidationError (subclasses ValueError)."""
 
-        request = _make_request("/gateways/gw1")
+        request = _make_request("/v1/gateways/gw1")
         monkeypatch.setattr(
             main_mod.MetadataCapture,
             "extract_modification_metadata",
@@ -12739,7 +12739,7 @@ class TestHardeningHelperCoverage:
             patch.object(main_mod.token_scoping_middleware, "_check_resource_team_ownership", return_value=False),
         ):
             with pytest.raises(HTTPException) as excinfo:
-                main_mod._enforce_scoped_resource_access(request, db, {"email": "user@example.com"}, "/servers/server-1")
+                main_mod._enforce_scoped_resource_access(request, db, {"email": "user@example.com"}, "/v1/servers/server-1")
 
         assert excinfo.value.status_code == 403
 
