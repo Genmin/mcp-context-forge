@@ -260,7 +260,7 @@ class OAuthManager:
         Returns:
             The HTTP response from the token endpoint.
         """
-        if ca_certificate:
+        if ca_certificate or client_cert or client_key:
             ssl_context = get_cached_ssl_context(ca_certificate, client_cert=client_cert, client_key=client_key)
             async with httpx.AsyncClient(verify=ssl_context) as client:
                 return await client.post(url, data=data, timeout=self.request_timeout)
