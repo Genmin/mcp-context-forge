@@ -253,3 +253,40 @@ def test_get_audit_trail_applies_filters(monkeypatch):
         offset=0,
     )
     assert len(result) == 1
+
+
+
+
+def test_log_action_handles_identity_extraction_failure(monkeypatch):
+    """Test audit logging continues when identity extraction fails.
+
+    Coverage: mcpgateway/services/audit_trail_service.py line 171
+    """
+    from mcpgateway.db import AuditTrail
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.setattr(svc.settings, "audit_trail_enabled", True)
+
+    # Create a mock session
+    mock_session = DummySession()
+
+    # Patch user_identity_var.get to raise so the except-pass path is exercised
+    with patch("mcpgateway.transports.context.user_identity_var") as mock_var:
+        mock_var.get.side_effect = Exception("Identity extraction failed")
+
+        # Should not raise exception despite identity extraction failure
+        service = svc.AuditTrailService()
+        service.log_action(
+            db=mock_session,
+            action="test_action",
+            resource_type="test_resource",
+            resource_id="123",
+            user_id="test-user",
+            details={"test": "data"}
+        )
+
+    # Audit entry should still be created
+    assert mock_session.committed
+    assert len(mock_session.added) == 1
+    assert isinstance(mock_session.added[0], AuditTrail)
+    assert mock_session.added[0].action == "test_action"
