@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Location: ./tests/e2e/test_entra_id_integration.py
+"""Location: ./tests/live_gateway/sso/test_entra_id_integration.py
 Copyright 2025
 SPDX-License-Identifier: Apache-2.0
 
@@ -34,7 +34,6 @@ Environment Variables:
 """
 
 from __future__ import annotations
-
 
 # Standard Library
 import asyncio
