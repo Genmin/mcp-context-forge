@@ -168,7 +168,7 @@ class AuditTrailService:
                             acting_as = identity.service_account
                         if delegation_chain is None and identity.delegation_chain:
                             delegation_chain = {"chain": identity.delegation_chain}
-                except Exception:
+                except Exception:  # nosec B110 - Best-effort identity extraction; audit entry must succeed even if metadata unavailable
                     pass
 
             # Create audit trail entry
