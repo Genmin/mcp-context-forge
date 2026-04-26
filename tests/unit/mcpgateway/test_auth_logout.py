@@ -77,7 +77,7 @@ class TestLogoutEndpoint:
 
                 client = TestClient(app)
                 response = client.post(
-                    "/auth/logout",
+                    "/v1/auth/logout",
                     headers={"Authorization": f"Bearer {valid_token}"}
                 )
 
@@ -106,7 +106,7 @@ class TestLogoutEndpoint:
 
         try:
             client = TestClient(app)
-            response = client.post("/auth/logout")
+            response = client.post("/v1/auth/logout")
 
             assert response.status_code == 401
         finally:
@@ -120,7 +120,7 @@ class TestLogoutEndpoint:
         try:
             client = TestClient(app)
             response = client.post(
-                "/auth/logout",
+                "/v1/auth/logout",
                 headers={"Authorization": "InvalidFormat token"}
             )
 
@@ -162,7 +162,7 @@ class TestLogoutEndpoint:
         try:
             client = TestClient(app)
             response = client.post(
-                "/auth/logout",
+                "/v1/auth/logout",
                 headers={"Authorization": f"Bearer {token}"}
             )
 
@@ -179,7 +179,7 @@ class TestLogoutEndpoint:
         try:
             client = TestClient(app)
             response = client.post(
-                "/auth/logout",
+                "/v1/auth/logout",
                 headers={"Authorization": "Bearer invalid.token.format"}
             )
 
@@ -202,7 +202,7 @@ class TestLogoutEndpoint:
 
                 client = TestClient(app)
                 response = client.post(
-                    "/auth/logout",
+                    "/v1/auth/logout",
                     headers={"Authorization": f"Bearer {valid_token}"}
                 )
 
@@ -222,7 +222,7 @@ class TestLogoutEndpoint:
 
                 client = TestClient(app)
                 response = client.post(
-                    "/auth/logout",
+                    "/v1/auth/logout",
                     headers={"Authorization": f"Bearer {valid_token}"}
                 )
 
@@ -259,7 +259,7 @@ class TestLogoutEndpoint:
 
                     client = TestClient(app)
                     response = client.post(
-                        "/auth/logout",
+                        "/v1/auth/logout",
                         headers={"Authorization": f"Bearer {valid_token}"}
                     )
 

@@ -191,7 +191,7 @@ class TestIdleTimeoutRedisHit:
                 return_value=mock_blocklist,
             ),
         ):
-            response = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            response = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
 
         assert response.status_code == 200
         mock_blocklist.get_last_activity.assert_called_once_with(jti)
@@ -209,7 +209,7 @@ class TestIdleTimeoutRedisHit:
                 return_value=mock_blocklist,
             ),
         ):
-            response = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            response = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
 
         assert response.status_code == 401
         assert "idle timeout" in response.json()["detail"].lower()
@@ -234,7 +234,7 @@ class TestIdleTimeoutJwtFallback:
                 return_value=mock_blocklist,
             ),
         ):
-            response = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            response = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
 
         assert response.status_code == 401
         assert "idle timeout" in response.json()["detail"].lower()
@@ -252,7 +252,7 @@ class TestIdleTimeoutJwtFallback:
                 return_value=mock_blocklist,
             ),
         ):
-            response = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            response = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
 
         assert response.status_code == 401
         assert "idle timeout" in response.json()["detail"].lower()
@@ -273,7 +273,7 @@ class TestIdleTimeoutErrorPaths:
                 return_value=mock_blocklist,
             ),
         ):
-            response = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            response = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
 
         assert response.status_code == 401
         assert "idle timeout" in response.json()["detail"].lower()
@@ -291,7 +291,7 @@ class TestIdleTimeoutErrorPaths:
                 return_value=mock_blocklist,
             ),
         ):
-            response = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            response = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
 
         assert response.status_code == 401
         assert "idle timeout" in response.json()["detail"].lower()
@@ -307,7 +307,7 @@ class TestIdleTimeoutErrorPaths:
                 return_value=mock_blocklist,
             ),
         ):
-            response = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            response = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
 
         assert response.status_code == 200
         mock_blocklist.update_activity.assert_called_once()
@@ -327,7 +327,7 @@ class TestIdleTimeoutDisabled:
                 return_value=mock_blocklist,
             ),
         ):
-            response = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            response = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
 
         assert response.status_code == 200
         mock_blocklist.get_last_activity.assert_not_called()
