@@ -168,8 +168,8 @@ class AuditTrailService:
                             acting_as = identity.service_account
                         if delegation_chain is None and identity.delegation_chain:
                             delegation_chain = {"chain": identity.delegation_chain}
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Could not read user identity context for audit trail: %s", exc)
 
             # Create audit trail entry
             audit_entry = AuditTrail(
