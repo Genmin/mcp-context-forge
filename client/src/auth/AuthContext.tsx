@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = sessionStorage.getItem("mcpgateway_token");
     if (token && !state.user) {
       api
-        .get<User>("/auth/me")
+        .get<User>("/auth/email/me")
         .then((user) => {
           setState({ user, isAuthenticated: true });
         })
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [state.user]);
 
-  const login = useCallback(async (email: string, password: string): Promise<void> => {
+  /* prettier-ignore */ const login = useCallback(async (email: string, password: string): Promise<void> => { // pragma: allowlist secret
     const data = await api.post<LoginResponse>(
       "/auth/login",
       { email, password },
