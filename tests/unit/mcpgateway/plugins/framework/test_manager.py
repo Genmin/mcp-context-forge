@@ -8,6 +8,7 @@ Unit tests for plugin manager.
 """
 
 # Standard
+import importlib.util
 from pathlib import Path
 
 # Third-Party
@@ -558,6 +559,16 @@ async def test_manager_initializes_packaged_plugins_from_shipped_configs(tmp_pat
             selected_plugin["mode"] = "permissive"
         selected_plugins.append(selected_plugin)
     assert {plugin["name"] for plugin in selected_plugins} == expected_names
+
+    missing_modules = sorted(
+        {
+            plugin["kind"].rsplit(".", 1)[0]
+            for plugin in selected_plugins
+            if plugin.get("kind", "").startswith("cpex_") and importlib.util.find_spec(plugin["kind"].rsplit(".", 1)[0]) is None
+        }
+    )
+    if missing_modules:
+        pytest.skip(f"Missing packaged plugin dependencies: {', '.join(missing_modules)}")
 
     smoke_config = {
         "plugin_dirs": config.get("plugin_dirs", []),

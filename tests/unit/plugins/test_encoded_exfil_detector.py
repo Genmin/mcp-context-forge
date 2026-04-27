@@ -9,6 +9,8 @@ import logging
 from pydantic import ValidationError
 import pytest
 
+pytest.importorskip("cpex_encoded_exfil_detection.encoded_exfil_detection")
+
 # First-Party
 from mcpgateway.plugins.framework import (
     GlobalContext,
