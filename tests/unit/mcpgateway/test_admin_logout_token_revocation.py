@@ -27,7 +27,6 @@ from fastapi.testclient import TestClient
 # First-Party
 from mcpgateway.admin import enforce_admin_csrf
 from mcpgateway.config import settings
-from mcpgateway.main import app
 
 
 def _jwt_secret() -> str:
@@ -55,7 +54,7 @@ def _build_admin_jwt(*, include_jti: bool = True, expires_in_minutes: int = 20) 
 
 
 @pytest.fixture
-def disable_admin_csrf():
+def disable_admin_csrf(main_app_with_admin_api):
     """Bypass admin CSRF for happy-path tests via dependency override.
 
     A separate test (``test_admin_logout_post_rejects_missing_csrf_token``)
@@ -65,11 +64,11 @@ def disable_admin_csrf():
     async def _noop():
         return None
 
-    app.dependency_overrides[enforce_admin_csrf] = _noop
+    main_app_with_admin_api.dependency_overrides[enforce_admin_csrf] = _noop
     try:
-        yield
+        yield main_app_with_admin_api
     finally:
-        app.dependency_overrides.pop(enforce_admin_csrf, None)
+        main_app_with_admin_api.dependency_overrides.pop(enforce_admin_csrf, None)
 
 
 class TestAdminLogoutTokenRevocation:
@@ -87,7 +86,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist.revoke_token.return_value = True
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(disable_admin_csrf, follow_redirects=False)
             response = client.post("/admin/logout", cookies={"jwt_token": token})
 
             assert response.status_code in (302, 303, 307, 200)
@@ -104,7 +103,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist = MagicMock()
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(disable_admin_csrf, follow_redirects=False)
             response = client.post("/admin/logout")
 
             assert response.status_code in (302, 303, 307, 200)
@@ -119,7 +118,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist = MagicMock()
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(disable_admin_csrf, follow_redirects=False)
             response = client.post("/admin/logout", cookies={"jwt_token": "not.a.valid.jwt"})
 
             assert response.status_code in (302, 303, 307, 200)
@@ -137,7 +136,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist = MagicMock()
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(disable_admin_csrf, follow_redirects=False)
             response = client.post("/admin/logout", cookies={"jwt_token": token})
 
             assert response.status_code in (302, 303, 307, 200)
@@ -155,7 +154,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist.revoke_token.side_effect = Exception("Database unavailable")
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(disable_admin_csrf, follow_redirects=False)
             response = client.post("/admin/logout", cookies={"jwt_token": token})
 
             assert response.status_code in (302, 303, 307, 200)
@@ -165,7 +164,7 @@ class TestAdminLogoutTokenRevocation:
 class TestAdminLogoutDenyPaths:
     """Deny-path regression tests required by AGENTS.md for security-sensitive changes."""
 
-    def test_post_with_jwt_cookie_but_no_csrf_token_is_rejected(self):
+    def test_post_with_jwt_cookie_but_no_csrf_token_is_rejected(self, main_app_with_admin_api):
         """Cookie auth + state-changing POST without a CSRF token must return 403.
 
         This protects against cross-site-forced-logout attacks. No
@@ -178,14 +177,14 @@ class TestAdminLogoutDenyPaths:
             mock_blocklist = MagicMock()
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(main_app_with_admin_api, follow_redirects=False)
             response = client.post("/admin/logout", cookies={"jwt_token": token})
 
             assert response.status_code == 403
             assert "csrf" in response.json().get("detail", "").lower()
             mock_blocklist.revoke_token.assert_not_called()
 
-    def test_get_logout_is_exempt_from_csrf(self):
+    def test_get_logout_is_exempt_from_csrf(self, main_app_with_admin_api):
         """GET /admin/logout supports OIDC front-channel logout and is exempt from CSRF.
 
         Per the OIDC Front-Channel Logout 1.0 spec the IdP issues a GET; we
@@ -202,7 +201,7 @@ class TestAdminLogoutDenyPaths:
             mock_blocklist.revoke_token.return_value = True
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(main_app_with_admin_api, follow_redirects=False)
             response = client.get(
                 "/admin/logout",
                 cookies={"jwt_token": token},
