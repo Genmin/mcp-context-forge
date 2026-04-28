@@ -455,13 +455,20 @@ class TokenCatalogService:
             if not team:
                 raise ValueError(f"Team not found: {team_id}")
 
-            # Verify user is an active member of the team
-            membership = self.db.execute(
-                select(EmailTeamMember).where(and_(EmailTeamMember.team_id == team_id, EmailTeamMember.user_email == user_email, EmailTeamMember.is_active.is_(True)))
-            ).scalar_one_or_none()
+            # Admin bypass: Un-narrowed platform admins (is_admin=True AND caller_permissions=["*"])
+            # can create team tokens without being active team members.
+            # This supports service account workflows and centralized token management.
+            # Narrowed admin sessions and regular users still require team membership.
+            is_unrestricted_admin = caller_permissions is not None and caller_permissions == ["*"]
 
-            if not membership:
-                raise ValueError(f"User {user_email} is not an active member of team {team_id}. Only team members can create tokens for the team.")
+            if not is_unrestricted_admin:
+                # Verify user is an active member of the team
+                membership = self.db.execute(
+                    select(EmailTeamMember).where(and_(EmailTeamMember.team_id == team_id, EmailTeamMember.user_email == user_email, EmailTeamMember.is_active.is_(True)))
+                ).scalar_one_or_none()
+
+                if not membership:
+                    raise ValueError(f"User {user_email} is not an active member of team {team_id}. Only team members can create tokens for the team.")
 
         # Check for duplicate active token name for this user within the same team scope,
         # matching DB constraint uq_email_api_tokens_user_name_team (user_email, name, team_id).

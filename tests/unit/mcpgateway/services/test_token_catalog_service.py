@@ -521,6 +521,120 @@ class TestTokenCatalogService:
 
         with pytest.raises(ValueError, match="User test@example.com is not an active member of team team-123. Only team members can create tokens for the team."):
             await token_service.create_token(user_email="test@example.com", name="Token", team_id="team-123")
+    @pytest.mark.asyncio
+    async def test_create_token_admin_bypass_with_unrestricted_permissions(self, token_service, mock_db, mock_user, mock_team):
+        """Test admin bypass: un-narrowed platform admin can create team tokens without membership.
+
+        Security invariant: Requires caller_permissions=["*"] (un-narrowed admin).
+        This supports service account workflows and centralized token management.
+        """
+        mock_db.execute.return_value.scalar_one_or_none.side_effect = [
+            mock_user,  # User exists
+            mock_team,  # Team exists
+            # No membership check - admin bypass
+            None,  # No existing token with same name
+        ]
+
+        with patch.object(token_service, "_generate_token", new_callable=AsyncMock) as mock_gen_token:
+            mock_gen_token.return_value = "jwt_token_admin_bypass"
+
+            # Un-narrowed admin with wildcard permissions can bypass team membership
+            token, raw_token = await token_service.create_token(
+                user_email="admin@example.com",
+                name="Admin Service Token",
+                team_id="team-123",
+                caller_permissions=["*"],  # Un-narrowed admin
+                expires_in_days=30,
+            )
+
+            assert raw_token == "jwt_token_admin_bypass"
+            added_token = mock_db.add.call_args[0][0]
+            assert added_token.team_id == "team-123"
+            assert added_token.user_email == "admin@example.com"
+            # Verify membership check was skipped (only 3 DB queries, not 4)
+            assert mock_db.execute.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_create_token_narrowed_admin_requires_membership(self, token_service, mock_db, mock_user, mock_team):
+        """Test security invariant: narrowed admin sessions still require team membership.
+
+        Even if user has is_admin=True, if caller_permissions is not ["*"],
+        they must be an active team member.
+        """
+        mock_db.execute.return_value.scalar_one_or_none.side_effect = [
+            mock_user,  # User exists
+            mock_team,  # Team exists
+            None,  # User is NOT a team member
+        ]
+
+        # Narrowed admin (has specific permissions, not wildcard) must be team member
+        with pytest.raises(ValueError, match="User test@example.com is not an active member of team team-123"):
+            await token_service.create_token(
+                user_email="test@example.com",
+                name="Token",
+                team_id="team-123",
+                caller_permissions=["tools.read", "resources.read"],  # Narrowed permissions
+            )
+
+    @pytest.mark.asyncio
+    async def test_create_token_no_caller_permissions_requires_membership(self, token_service, mock_db, mock_user, mock_team):
+        """Test security invariant: without caller_permissions, team membership is required.
+
+        If caller_permissions is None or empty, the user must be an active team member.
+        """
+        mock_db.execute.return_value.scalar_one_or_none.side_effect = [
+            mock_user,  # User exists
+            mock_team,  # Team exists
+            None,  # User is NOT a team member
+        ]
+
+        # No caller_permissions means no admin bypass
+        with pytest.raises(ValueError, match="User test@example.com is not an active member of team team-123"):
+            await token_service.create_token(
+                user_email="test@example.com",
+                name="Token",
+                team_id="team-123",
+                caller_permissions=None,  # No permissions provided
+            )
+
+    @pytest.mark.asyncio
+    async def test_create_token_empty_caller_permissions_requires_membership(self, token_service, mock_db, mock_user, mock_team):
+        """Test security invariant: empty caller_permissions list requires team membership."""
+        mock_db.execute.return_value.scalar_one_or_none.side_effect = [
+            mock_user,  # User exists
+            mock_team,  # Team exists
+            None,  # User is NOT a team member
+        ]
+
+        # Empty permissions list means no admin bypass
+        with pytest.raises(ValueError, match="User test@example.com is not an active member of team team-123"):
+            await token_service.create_token(
+                user_email="test@example.com",
+                name="Token",
+                team_id="team-123",
+                caller_permissions=[],  # Empty permissions
+            )
+
+    @pytest.mark.asyncio
+    async def test_create_token_admin_bypass_still_validates_team_exists(self, token_service, mock_db, mock_user):
+        """Test security invariant: admin bypass still requires team to exist.
+
+        Even un-narrowed admins cannot create tokens for non-existent teams.
+        """
+        mock_db.execute.return_value.scalar_one_or_none.side_effect = [
+            mock_user,  # User exists
+            None,  # Team does NOT exist
+        ]
+
+        # Admin bypass doesn't skip team existence validation
+        with pytest.raises(ValueError, match="Team not found: nonexistent-team"):
+            await token_service.create_token(
+                user_email="admin@example.com",
+                name="Token",
+                team_id="nonexistent-team",
+                caller_permissions=["*"],  # Un-narrowed admin
+            )
+
 
     @pytest.mark.asyncio
     async def test_create_token_with_scope(self, token_service, mock_db, mock_user, token_scope):
