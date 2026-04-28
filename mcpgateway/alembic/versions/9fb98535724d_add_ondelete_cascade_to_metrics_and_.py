@@ -20,131 +20,186 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def upgrade() -> None:
-    """Add CASCADE ondelete to foreign keys in metrics and association tables.
+def _get_fk_names(inspector, table_name: str, referred_table: str | None = None) -> list[str]:
+    """Return foreign-key constraint names for a table, optionally filtered by target table."""
+    names: list[str] = []
+    for fk in inspector.get_foreign_keys(table_name):
+        if referred_table is not None and fk.get("referred_table") != referred_table:
+            continue
+        name = fk.get("name")
+        if name:
+            names.append(name)
+    return names
 
-    This migration fixes issue #4478 where DELETE operations on tools, resources,
-    and prompts fail with FK constraint violations after the entities have been
-    invoked at least once (creating metrics rows).
 
-    The migration is idempotent - it checks for table existence before attempting
-    modifications to support both fresh databases (which use db.py models directly)
-    and existing databases that need the schema update.
-    """
-    inspector = sa.inspect(op.get_bind())
+def _has_cascade_fk(inspector, table_name: str, referred_table: str) -> bool:
+    """Return True when the FK to the referred table already uses ON DELETE CASCADE."""
+    for fk in inspector.get_foreign_keys(table_name):
+        if fk.get("referred_table") != referred_table:
+            continue
+        if (fk.get("options") or {}).get("ondelete") == "CASCADE":
+            return True
+    return False
 
-    # Get database dialect
+
+def _replace_single_fk_with_cascade(table_name: str, referred_table: str, local_cols: list[str], remote_cols: list[str]) -> None:
+    """Replace a single FK to the referred table with an ON DELETE CASCADE version."""
     bind = op.get_bind()
-    dialect_name = bind.dialect.name
+    inspector = sa.inspect(bind)
 
-    # Skip if tables don't exist (fresh DB uses db.py models directly)
-    existing_tables = inspector.get_table_names()
+    if table_name not in inspector.get_table_names():
+        return
 
-    # ========================================================================
-    # 1. Update tool_metrics.tool_id FK to CASCADE
-    # ========================================================================
-    if "tool_metrics" in existing_tables:
-        with op.batch_alter_table("tool_metrics", schema=None) as batch_op:
-            batch_op.drop_constraint("tool_metrics_tool_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.create_foreign_key("tool_metrics_tool_id_fkey" if dialect_name == "postgresql" else None, "tools", ["tool_id"], ["id"], ondelete="CASCADE")
+    if _has_cascade_fk(inspector, table_name, referred_table):
+        return
 
-    # ========================================================================
-    # 2. Update resource_metrics.resource_id FK to CASCADE
-    # ========================================================================
-    if "resource_metrics" in existing_tables:
-        with op.batch_alter_table("resource_metrics", schema=None) as batch_op:
-            batch_op.drop_constraint("resource_metrics_resource_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.create_foreign_key("resource_metrics_resource_id_fkey" if dialect_name == "postgresql" else None, "resources", ["resource_id"], ["id"], ondelete="CASCADE")
+    fk_names = _get_fk_names(inspector, table_name, referred_table)
+    if len(fk_names) != 1:
+        raise RuntimeError(f"Expected exactly one foreign key from {table_name} to {referred_table}, found {fk_names}")
 
-    # ========================================================================
-    # 3. Update prompt_metrics.prompt_id FK to CASCADE
-    # ========================================================================
-    if "prompt_metrics" in existing_tables:
-        with op.batch_alter_table("prompt_metrics", schema=None) as batch_op:
-            batch_op.drop_constraint("prompt_metrics_prompt_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.create_foreign_key("prompt_metrics_prompt_id_fkey" if dialect_name == "postgresql" else None, "prompts", ["prompt_id"], ["id"], ondelete="CASCADE")
+    fk_name = fk_names[0]
+    new_fk_name = f"fk_{table_name}_{local_cols[0]}"
 
-    # ========================================================================
-    # 4. Update server_tool_association FKs to CASCADE
-    # ========================================================================
-    if "server_tool_association" in existing_tables:
-        with op.batch_alter_table("server_tool_association", schema=None) as batch_op:
-            # Drop existing FKs
-            batch_op.drop_constraint("server_tool_association_server_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.drop_constraint("server_tool_association_tool_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            # Recreate with CASCADE
-            batch_op.create_foreign_key("server_tool_association_server_id_fkey" if dialect_name == "postgresql" else None, "servers", ["server_id"], ["id"], ondelete="CASCADE")
-            batch_op.create_foreign_key("server_tool_association_tool_id_fkey" if dialect_name == "postgresql" else None, "tools", ["tool_id"], ["id"], ondelete="CASCADE")
+    with op.batch_alter_table(table_name, schema=None) as batch_op:
+        batch_op.drop_constraint(fk_name, type_="foreignkey")
+        batch_op.create_foreign_key(new_fk_name, referred_table, local_cols, remote_cols, ondelete="CASCADE")
 
-    # ========================================================================
-    # 5. Update server_resource_association FKs to CASCADE
-    # ========================================================================
-    if "server_resource_association" in existing_tables:
-        with op.batch_alter_table("server_resource_association", schema=None) as batch_op:
-            # Drop existing FKs
-            batch_op.drop_constraint("server_resource_association_server_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.drop_constraint("server_resource_association_resource_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            # Recreate with CASCADE
-            batch_op.create_foreign_key("server_resource_association_server_id_fkey" if dialect_name == "postgresql" else None, "servers", ["server_id"], ["id"], ondelete="CASCADE")
-            batch_op.create_foreign_key("server_resource_association_resource_id_fkey" if dialect_name == "postgresql" else None, "resources", ["resource_id"], ["id"], ondelete="CASCADE")
 
-    # ========================================================================
-    # 6. Update server_prompt_association FKs to CASCADE
-    # ========================================================================
-    if "server_prompt_association" in existing_tables:
-        with op.batch_alter_table("server_prompt_association", schema=None) as batch_op:
-            # Drop existing FKs
-            batch_op.drop_constraint("server_prompt_association_server_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.drop_constraint("server_prompt_association_prompt_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            # Recreate with CASCADE
-            batch_op.create_foreign_key("server_prompt_association_server_id_fkey" if dialect_name == "postgresql" else None, "servers", ["server_id"], ["id"], ondelete="CASCADE")
-            batch_op.create_foreign_key("server_prompt_association_prompt_id_fkey" if dialect_name == "postgresql" else None, "prompts", ["prompt_id"], ["id"], ondelete="CASCADE")
+def _replace_all_fks_with_cascade(table_name: str, fk_specs: list[tuple[str, list[str], list[str]]]) -> None:
+    """Replace all FKs on an association table with ON DELETE CASCADE versions."""
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if table_name not in inspector.get_table_names():
+        return
+
+    current_fks = inspector.get_foreign_keys(table_name)
+    if not current_fks:
+        return
+
+    all_cascade = True
+    for referred_table, _local_cols, _remote_cols in fk_specs:
+        if not _has_cascade_fk(inspector, table_name, referred_table):
+            all_cascade = False
+            break
+
+    if all_cascade:
+        return
+
+    fk_names = [fk.get("name") for fk in current_fks if fk.get("name")]
+    expected_targets = {spec[0] for spec in fk_specs}
+    actual_targets = {fk.get("referred_table") for fk in current_fks}
+
+    if actual_targets != expected_targets:
+        raise RuntimeError(f"Unexpected foreign key layout for {table_name}: targets={sorted(actual_targets)} names={fk_names}")
+
+    with op.batch_alter_table(table_name, schema=None) as batch_op:
+        for fk_name in fk_names:
+            batch_op.drop_constraint(fk_name, type_="foreignkey")
+
+        for referred_table, local_cols, remote_cols in fk_specs:
+            batch_op.create_foreign_key(f"fk_{table_name}_{local_cols[0]}", referred_table, local_cols, remote_cols, ondelete="CASCADE")
+
+
+def upgrade() -> None:
+    """Add CASCADE ondelete to foreign keys in metrics and association tables."""
+    _replace_single_fk_with_cascade("tool_metrics", "tools", ["tool_id"], ["id"])
+    _replace_single_fk_with_cascade("resource_metrics", "resources", ["resource_id"], ["id"])
+    _replace_single_fk_with_cascade("prompt_metrics", "prompts", ["prompt_id"], ["id"])
+
+    _replace_all_fks_with_cascade(
+        "server_tool_association",
+        [
+            ("servers", ["server_id"], ["id"]),
+            ("tools", ["tool_id"], ["id"]),
+        ],
+    )
+    _replace_all_fks_with_cascade(
+        "server_resource_association",
+        [
+            ("servers", ["server_id"], ["id"]),
+            ("resources", ["resource_id"], ["id"]),
+        ],
+    )
+    _replace_all_fks_with_cascade(
+        "server_prompt_association",
+        [
+            ("servers", ["server_id"], ["id"]),
+            ("prompts", ["prompt_id"], ["id"]),
+        ],
+    )
+
+
+def _replace_single_fk_without_cascade(table_name: str, referred_table: str, local_cols: list[str], remote_cols: list[str]) -> None:
+    """Replace a single FK to the referred table with a default NO ACTION version."""
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if table_name not in inspector.get_table_names():
+        return
+
+    fk_names = _get_fk_names(inspector, table_name, referred_table)
+    if len(fk_names) != 1:
+        raise RuntimeError(f"Expected exactly one foreign key from {table_name} to {referred_table}, found {fk_names}")
+
+    fk_name = fk_names[0]
+    new_fk_name = f"fk_{table_name}_{local_cols[0]}"
+
+    with op.batch_alter_table(table_name, schema=None) as batch_op:
+        batch_op.drop_constraint(fk_name, type_="foreignkey")
+        batch_op.create_foreign_key(new_fk_name, referred_table, local_cols, remote_cols)
+
+
+def _replace_all_fks_without_cascade(table_name: str, fk_specs: list[tuple[str, list[str], list[str]]]) -> None:
+    """Replace all FKs on an association table with default NO ACTION versions."""
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if table_name not in inspector.get_table_names():
+        return
+
+    current_fks = inspector.get_foreign_keys(table_name)
+    if not current_fks:
+        return
+
+    fk_names = [fk.get("name") for fk in current_fks if fk.get("name")]
+    expected_targets = {spec[0] for spec in fk_specs}
+    actual_targets = {fk.get("referred_table") for fk in current_fks}
+
+    if actual_targets != expected_targets:
+        raise RuntimeError(f"Unexpected foreign key layout for {table_name}: targets={sorted(actual_targets)} names={fk_names}")
+
+    with op.batch_alter_table(table_name, schema=None) as batch_op:
+        for fk_name in fk_names:
+            batch_op.drop_constraint(fk_name, type_="foreignkey")
+
+        for referred_table, local_cols, remote_cols in fk_specs:
+            batch_op.create_foreign_key(f"fk_{table_name}_{local_cols[0]}", referred_table, local_cols, remote_cols)
 
 
 def downgrade() -> None:
-    """Revert CASCADE ondelete back to default (NO ACTION).
-
-    This downgrade is provided for completeness but should rarely be needed,
-    as the CASCADE behavior is the correct fix for the FK constraint issue.
-    """
-    inspector = sa.inspect(op.get_bind())
-    bind = op.get_bind()
-    dialect_name = bind.dialect.name
-    existing_tables = inspector.get_table_names()
-
-    # Revert in reverse order
-    if "server_prompt_association" in existing_tables:
-        with op.batch_alter_table("server_prompt_association", schema=None) as batch_op:
-            batch_op.drop_constraint("server_prompt_association_server_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.drop_constraint("server_prompt_association_prompt_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.create_foreign_key("server_prompt_association_server_id_fkey" if dialect_name == "postgresql" else None, "servers", ["server_id"], ["id"])
-            batch_op.create_foreign_key("server_prompt_association_prompt_id_fkey" if dialect_name == "postgresql" else None, "prompts", ["prompt_id"], ["id"])
-
-    if "server_resource_association" in existing_tables:
-        with op.batch_alter_table("server_resource_association", schema=None) as batch_op:
-            batch_op.drop_constraint("server_resource_association_server_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.drop_constraint("server_resource_association_resource_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.create_foreign_key("server_resource_association_server_id_fkey" if dialect_name == "postgresql" else None, "servers", ["server_id"], ["id"])
-            batch_op.create_foreign_key("server_resource_association_resource_id_fkey" if dialect_name == "postgresql" else None, "resources", ["resource_id"], ["id"])
-
-    if "server_tool_association" in existing_tables:
-        with op.batch_alter_table("server_tool_association", schema=None) as batch_op:
-            batch_op.drop_constraint("server_tool_association_server_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.drop_constraint("server_tool_association_tool_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.create_foreign_key("server_tool_association_server_id_fkey" if dialect_name == "postgresql" else None, "servers", ["server_id"], ["id"])
-            batch_op.create_foreign_key("server_tool_association_tool_id_fkey" if dialect_name == "postgresql" else None, "tools", ["tool_id"], ["id"])
-
-    if "prompt_metrics" in existing_tables:
-        with op.batch_alter_table("prompt_metrics", schema=None) as batch_op:
-            batch_op.drop_constraint("prompt_metrics_prompt_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.create_foreign_key("prompt_metrics_prompt_id_fkey" if dialect_name == "postgresql" else None, "prompts", ["prompt_id"], ["id"])
-
-    if "resource_metrics" in existing_tables:
-        with op.batch_alter_table("resource_metrics", schema=None) as batch_op:
-            batch_op.drop_constraint("resource_metrics_resource_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.create_foreign_key("resource_metrics_resource_id_fkey" if dialect_name == "postgresql" else None, "resources", ["resource_id"], ["id"])
-
-    if "tool_metrics" in existing_tables:
-        with op.batch_alter_table("tool_metrics", schema=None) as batch_op:
-            batch_op.drop_constraint("tool_metrics_tool_id_fkey" if dialect_name == "postgresql" else None, type_="foreignkey")
-            batch_op.create_foreign_key("tool_metrics_tool_id_fkey" if dialect_name == "postgresql" else None, "tools", ["tool_id"], ["id"])
+    """Revert CASCADE ondelete back to default (NO ACTION)."""
+    _replace_all_fks_without_cascade(
+        "server_prompt_association",
+        [
+            ("servers", ["server_id"], ["id"]),
+            ("prompts", ["prompt_id"], ["id"]),
+        ],
+    )
+    _replace_all_fks_without_cascade(
+        "server_resource_association",
+        [
+            ("servers", ["server_id"], ["id"]),
+            ("resources", ["resource_id"], ["id"]),
+        ],
+    )
+    _replace_all_fks_without_cascade(
+        "server_tool_association",
+        [
+            ("servers", ["server_id"], ["id"]),
+            ("tools", ["tool_id"], ["id"]),
+        ],
+    )
+    _replace_single_fk_without_cascade("prompt_metrics", "prompts", ["prompt_id"], ["id"])
+    _replace_single_fk_without_cascade("resource_metrics", "resources", ["resource_id"], ["id"])
+    _replace_single_fk_without_cascade("tool_metrics", "tools", ["tool_id"], ["id"])
