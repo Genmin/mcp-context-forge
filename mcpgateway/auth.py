@@ -73,7 +73,6 @@ import uuid
 # Third-Party
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from fastapi.security.http import HTTPBase
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 
@@ -146,19 +145,13 @@ class ConfigurableHTTPBearer(HTTPBearer):
 
         if not authorization:
             if self.auto_error:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authenticated"
-                )
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authenticated")
             return None
 
         scheme, _, credentials = authorization.partition(" ")
         if scheme.lower() != "bearer":
             if self.auto_error:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Invalid authentication credentials"
-                )
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid authentication credentials")
             return None
 
         return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)
