@@ -95,7 +95,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist.revoke_token.return_value = True
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(main_app_with_admin_api, follow_redirects=False)
             response = client.post("/v1/admin/logout", cookies={"jwt_token": token})
 
             assert response.status_code in (302, 303, 307, 200)
@@ -112,7 +112,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist = MagicMock()
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(main_app_with_admin_api, follow_redirects=False)
             response = client.post("/v1/admin/logout")
 
             assert response.status_code in (302, 303, 307, 200)
@@ -127,7 +127,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist = MagicMock()
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(main_app_with_admin_api, follow_redirects=False)
             response = client.post("/v1/admin/logout", cookies={"jwt_token": "not.a.valid.jwt"})
 
             assert response.status_code in (302, 303, 307, 200)
@@ -145,7 +145,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist = MagicMock()
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(main_app_with_admin_api, follow_redirects=False)
             response = client.post("/v1/admin/logout", cookies={"jwt_token": token})
 
             assert response.status_code in (302, 303, 307, 200)
@@ -163,7 +163,7 @@ class TestAdminLogoutTokenRevocation:
             mock_blocklist.revoke_token.side_effect = Exception("Database unavailable")
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(main_app_with_admin_api, follow_redirects=False)
             response = client.post("/v1/admin/logout", cookies={"jwt_token": token})
 
             assert response.status_code in (302, 303, 307, 200)
@@ -186,7 +186,7 @@ class TestAdminLogoutDenyPaths:
             mock_blocklist = MagicMock()
             mock_get_service.return_value = mock_blocklist
 
-            client = TestClient(app, follow_redirects=False)
+            client = TestClient(main_app_with_admin_api, follow_redirects=False)
             response = client.post("/v1/admin/logout", cookies={"jwt_token": token})
 
             assert response.status_code == 403
@@ -210,6 +210,7 @@ class TestAdminLogoutDenyPaths:
             mock_blocklist.revoke_token.return_value = True
             mock_get_service.return_value = mock_blocklist
 
+            client = TestClient(main_app_with_admin_api, follow_redirects=False)
             response = client.get(
                 "/v1/admin/logout",
                 cookies={"jwt_token": token},
