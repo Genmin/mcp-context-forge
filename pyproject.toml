@@ -283,6 +283,7 @@ plugins = [
     "cpex-retry-with-backoff>=0.1.0",
     "cpex-secrets-detection>=0.2.0",
     "cpex-url-reputation>=0.2.0",
+    "llm-guard>=0.3.16", # Tier-2 ML classifier for PromptInjectionGuardPlugin (use_llm_guard=true)
 ]
 
 # gRPC Support (EXPERIMENTAL - optional, disabled by default)
