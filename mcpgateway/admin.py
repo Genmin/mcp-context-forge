@@ -13898,11 +13898,51 @@ async def admin_test_gateway(
         'admin_test_gateway'
     """
     start_time: float = time.monotonic()
+
+    # Build allowlist for gateway test endpoint
+    allowed_hosts: list[str] = []
+
+    if settings.gateway_test_allow_registered_only:
+        # Mode 1: Only allow testing registered gateway URLs
+        # Query all enabled gateways to build allowlist from their base URLs
+        try:
+            query = select(DbGateway.url).where(DbGateway.enabled)
+            if team_id:
+                query = query.where(DbGateway.team_id == team_id)
+            registered_urls = db.execute(query).scalars().all()
+
+            # Extract hostnames from registered gateway URLs
+            for url in registered_urls:
+                try:
+                    parsed = urlparse(url)
+                    if parsed.hostname:
+                        # Normalize: lowercase and strip trailing dots
+                        hostname = parsed.hostname.lower().rstrip(".")
+                        if hostname not in allowed_hosts:
+                            allowed_hosts.append(hostname)
+                except Exception:
+                    continue
+        except Exception as e:
+            LOGGER.warning("Failed to build allowlist from registered gateways: %s", e)
+    else:
+        # Mode 2: Use configured host patterns from settings
+        allowed_hosts = list(settings.gateway_test_allowed_hosts)
+
+    # Validate URL with allowlist enforcement
     try:
-        validated_base_url = SecurityValidator.validate_url(str(request.base_url), "Gateway test URL")
+        validated_base_url = SecurityValidator.validate_gateway_test_url(
+            str(request.base_url), allowed_hosts, "Gateway test URL"
+        )
     except ValueError as e:
-        LOGGER.warning("Gateway test URL validation failed for %s: %s", request.base_url, e)
+        # Log the actual error for security monitoring, but return generic message
+        LOGGER.warning(
+            "Gateway test URL validation failed for %s by user %s: %s",
+            request.base_url,
+            get_user_email(user),
+            str(e),
+        )
         latency_ms = int((time.monotonic() - start_time) * 1000)
+        # Generic error message - don't expose allowlist or validation details
         return GatewayTestResponse(status_code=400, latency_ms=latency_ms, body={"error": "Invalid gateway URL"})
 
     full_url = validated_base_url.rstrip("/") + "/" + request.path.lstrip("/")

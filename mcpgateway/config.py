@@ -613,6 +613,26 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Gateway Test Endpoint Security
+    gateway_test_allowed_hosts: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Allowlist of host patterns for /admin/gateways/test endpoint. Supports exact hostnames "
+            "(example.com) and wildcards (*.example.com). Empty list = allow only registered gateways. "
+            "This prevents using the test endpoint as an open proxy to reach arbitrary external or "
+            "internal services."
+        ),
+    )
+
+    gateway_test_allow_registered_only: bool = Field(
+        default=True,
+        description=(
+            "When true, /admin/gateways/test only allows testing URLs that match registered gateway "
+            "base URLs in the database. When false, uses gateway_test_allowed_hosts patterns. "
+            "Default true for maximum security (test only what's already registered)."
+        ),
+    )
+
     # UAID Cross-Gateway Routing Security
     uaid_allowed_domains: List[str] = Field(
         default_factory=list,
